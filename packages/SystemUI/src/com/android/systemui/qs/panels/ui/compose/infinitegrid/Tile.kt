@@ -139,6 +139,7 @@ fun ContentScope.Tile(
     tile: TileViewModel,
     iconOnly: Boolean,
     squishiness: () -> Float,
+    isHeaderTile: Boolean = false,
     coroutineScope: CoroutineScope,
     bounceableInfo: BounceableInfo,
     tileHapticsViewModelFactory: TileHapticsViewModel.Factory,
@@ -212,6 +213,8 @@ fun ContentScope.Tile(
         val expandable =
             if (dynamicTargetResolutionEnabled()) tile.expandable
             else remember { Expandable(mutableSetOf()) }
+        val effectiveSquishiness: () -> Float =
+            if (isHeaderTile) ({ 1f }) else squishiness
         Tooltip(
             text = uiState.label,
             modifier = modifier,
@@ -221,7 +224,7 @@ fun ContentScope.Tile(
                 expandable = expandable,
                 color = { animatedColor },
                 shape = tileShape,
-                squishiness = squishiness,
+                squishiness = effectiveSquishiness,
                 hapticsViewModel = hapticsViewModel,
                 modifier =
                     modifier
@@ -337,7 +340,7 @@ fun ContentScope.Tile(
                             toggleClick = secondaryClick,
                             onLongClick = longClick,
                             accessibilityUiState = uiState.accessibilityUiState,
-                            squishiness = squishiness,
+                            squishiness = effectiveSquishiness,
                             isVisible = isVisible,
                             textScale = { currentBounceableInfo.bounceable.textBounceScale },
                             modifier =
@@ -514,10 +517,6 @@ data class TileColors(
     val label: Color,
     val secondaryLabel: Color,
     val icon: Color,
-    val outline: Color,
-    val classicLabel: Color,
-    val classicSecondaryLabel: Color,
-    val backgroundGradient: Brush? = null,
     val circleAroundIcon: Color = Color.Transparent,
 )
 
@@ -528,8 +527,8 @@ object TileMotionTestKeys {
 
 private object TileDefaults {
     private const val GlassSurfaceAlpha = 0.45f
-    private const val GlassIconSurfaceAlpha = 0.55f
-    private const val ActiveTileAlpha = 0.80f
+    private const val GlassIconSurfaceAlpha = GlassSurfaceAlpha
+    private const val ActiveTileAlpha = 1f
 
     /** An active tile uses the active color as background */
     @Composable
@@ -554,10 +553,6 @@ private object TileDefaults {
             label = MaterialTheme.colorScheme.onSurface,
             secondaryLabel = MaterialTheme.colorScheme.onSurface,
             icon = MaterialTheme.colorScheme.onPrimary,
-            outline = MaterialTheme.colorScheme.primary,
-            classicLabel = MaterialTheme.colorScheme.onSurface.copy(alpha = .9f),
-            classicSecondaryLabel = MaterialTheme.colorScheme.onSurface.copy(alpha = .8f),
-            backgroundGradient = gradient,
             circleAroundIcon = MaterialTheme.colorScheme.primary,
         )
 
@@ -572,9 +567,6 @@ private object TileDefaults {
             label = MaterialTheme.colorScheme.onSurface,
             secondaryLabel = MaterialTheme.colorScheme.onSurface,
             icon = MaterialTheme.colorScheme.onSurface,
-            outline = MaterialTheme.colorScheme.onSurface,
-            classicLabel = MaterialTheme.colorScheme.onSurface.copy(alpha = .9f),
-            classicSecondaryLabel = MaterialTheme.colorScheme.onSurface.copy(alpha = .8f),
             circleAroundIcon =
                 LocalAndroidColorScheme.current.surfaceEffect2.copy(alpha = GlassIconSurfaceAlpha),
         )
@@ -594,7 +586,8 @@ private object TileDefaults {
     @Composable
     @ReadOnlyComposable
     fun unavailableTileColors(): TileColors {
-        val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = .18f)
+        val surfaceColor =
+            LocalAndroidColorScheme.current.surfaceEffect1.copy(alpha = GlassSurfaceAlpha)
         val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .38f)
         return TileColors(
             background = surfaceColor,
