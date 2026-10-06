@@ -23,9 +23,11 @@ import static com.android.systemui.util.ColorUtilKt.hexColorString;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
@@ -42,6 +44,7 @@ import com.android.internal.graphics.drawable.BackgroundBlurDrawable;
 import com.android.internal.util.ContrastColorUtil;
 import com.android.systemui.Dumpable;
 import com.android.systemui.common.shared.colors.SurfaceEffectColors;
+import com.android.systemui.qs.shared.style.LiquidGlass;
 import com.android.systemui.res.R;
 import com.android.systemui.statusbar.notification.shared.NotificationAddXOnHoverToDismiss;
 import com.android.systemui.util.Assert;
@@ -81,6 +84,8 @@ public class NotificationBackgroundView extends View implements Dumpable,
     private final int convexR = 9;
     private final int concaveR = 22;
     private BackgroundBlurDrawable mBackgroundBlurDrawable;
+    // When true, the blur region is forced to alpha 0 (dropped from the aggregator) but kept around.
+    private boolean mBlurRegionSuppressed;
     @VisibleForTesting
     protected View.OnAttachStateChangeListener mOnAttachStateChangeListener;
 
@@ -153,6 +158,7 @@ public class NotificationBackgroundView extends View implements Dumpable,
                 mBackground.setBounds(backgroundBounds);
                 mBackground.draw(canvas);
             }
+            drawGlassRim(canvas, backgroundBounds);
 
             canvas.restore();
         }
@@ -246,7 +252,19 @@ public class NotificationBackgroundView extends View implements Dumpable,
             }
             drawable.setBounds(left, top, right, bottom);
             drawable.draw(canvas);
+            drawGlassRim(canvas, drawable.getBounds());
         }
+    }
+
+    private final RectF mGlassBounds = new RectF();
+
+    private void drawGlassRim(Canvas canvas, Rect bounds) {
+        if (bounds == null || !LiquidGlass.isEnabled(getContext())) {
+            return;
+        }
+        mGlassBounds.set(bounds);
+        LiquidGlass.drawRim(canvas, mGlassBounds, mCornerRadii,
+                getResources().getDisplayMetrics().density);
     }
 
     @Override
@@ -353,7 +371,10 @@ public class NotificationBackgroundView extends View implements Dumpable,
                                 mBackgroundBlurDrawable.setXfermode(null);
                                 mBackgroundBlurDrawable.setCallback(
                                         NotificationBackgroundView.this);
-                                mBackgroundBlurDrawable.setColor(mNormalColor);
+                                setTint(mTintColor != 0 ? mTintColor : mNormalColor);
+                                if (mBlurRegionSuppressed) {
+                                    mBackgroundBlurDrawable.setAlpha(0);
+                                }
 
                                 updateBackgroundRadii();
                                 invalidate();
@@ -390,16 +411,35 @@ public class NotificationBackgroundView extends View implements Dumpable,
         return ((LayerDrawable) mBackground).getDrawable(1);
     }
 
+    private int surfaceFor(int tintColor) {
+        if (tintColor != mNormalColor || !LiquidGlass.isEnabled(getContext())) return tintColor;
+        return mHeadsUpGlass ? LiquidGlass.headsUpSurface() : LiquidGlass.viewSurface();
+    }
+
+    private boolean glassOnBlur() {
+        return mBackgroundBlurDrawable != null && LiquidGlass.isEnabled(getContext());
+    }
+
+    private boolean mHeadsUpGlass;
+
+    public void setHeadsUpGlass(boolean headsUp) {
+        if (mHeadsUpGlass == headsUp) return;
+        mHeadsUpGlass = headsUp;
+        setTint(mTintColor);
+    }
+
     public void setTint(int tintColor) {
         Drawable baseLayer = getBaseBackgroundLayer();
+        final int surface = glassOnBlur() && tintColor == mNormalColor
+                ? Color.TRANSPARENT : surfaceFor(tintColor);
         if (notificationRowTransparency()) {
-            ((GradientDrawable) baseLayer.mutate()).setColor(tintColor);
+            ((GradientDrawable) baseLayer.mutate()).setColor(surface);
         } else {
             baseLayer.mutate().setTintMode(PorterDuff.Mode.SRC_ATOP);
-            baseLayer.setTint(tintColor);
+            baseLayer.setTint(surface);
         }
         if (mBackgroundBlurDrawable != null) {
-            mBackgroundBlurDrawable.setColor(tintColor);
+            mBackgroundBlurDrawable.setColor(surfaceFor(tintColor));
         }
         mTintColor = tintColor;
         setStatefulColors();
@@ -498,7 +538,19 @@ public class NotificationBackgroundView extends View implements Dumpable,
         }
         mBackground.setAlpha(drawableAlpha);
         if (mBackgroundBlurDrawable != null) {
-            mBackgroundBlurDrawable.setAlpha(drawableAlpha);
+            mBackgroundBlurDrawable.setAlpha(mBlurRegionSuppressed ? 0 : drawableAlpha);
+        }
+    }
+
+    /** Drops the blur region without tearing down the drawable; blur regions ignore ancestor alpha. */
+    public void setBlurRegionSuppressed(boolean suppressed) {
+        if (mBlurRegionSuppressed == suppressed) {
+            return;
+        }
+        mBlurRegionSuppressed = suppressed;
+        if (mBackgroundBlurDrawable != null) {
+            mBackgroundBlurDrawable.setAlpha(suppressed ? 0 : mDrawableAlpha);
+            invalidate();
         }
     }
 
