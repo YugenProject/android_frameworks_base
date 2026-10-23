@@ -33,12 +33,15 @@ import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.internal.graphics.drawable.BackgroundBlurDrawable
 import com.android.systemui.Flags
 import com.android.systemui.Flags.enableLockscreenBlur
+import com.android.systemui.common.ui.view.BackgroundBlurAlphaSync
 import com.android.systemui.common.ui.view.TouchHandlingView
 import com.android.systemui.keyguard.ui.view.DeviceEntryIconView
 import com.android.systemui.keyguard.ui.viewmodel.DeviceEntryBackgroundViewModel
 import com.android.systemui.keyguard.ui.viewmodel.DeviceEntryForegroundViewModel
 import com.android.systemui.keyguard.ui.viewmodel.DeviceEntryIconViewModel
 import com.android.systemui.lifecycle.repeatWhenAttached
+import com.android.systemui.penguin.CosFeature
+import com.android.systemui.penguin.CosFeatures
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.VibratorHelper
@@ -50,6 +53,7 @@ import kotlin.math.min
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DisposableHandle
+import kotlinx.coroutines.flow.combine
 
 object DeviceEntryIconViewBinder {
     private const val TAG = "DeviceEntryIconViewBinder"
@@ -288,8 +292,17 @@ object DeviceEntryIconViewBinder {
                                 setVisible(false, false)
                             }
                         bgView.addOnLayoutChangeListener(layoutChangeListener)
+                        // The blur region only knows the drawable's own alpha: follow the alpha
+                        // the icon is really drawn with (keyguard root fade on unlock, shade
+                        // drag) so the blur does not outlive the icon.
+                        val blurAlphaSync =
+                            BackgroundBlurAlphaSync(bgView) {
+                                    bgView.background as? BackgroundBlurDrawable
+                                }
+                                .start()
                         bgView.doOnDetach {
                             bgView.removeOnLayoutChangeListener(layoutChangeListener)
+                            blurAlphaSync.dispose()
                         }
 
                         launch("$TAG#windowRootViewBlurInteractor.isBlurCurrentlySupported") {
@@ -309,9 +322,13 @@ object DeviceEntryIconViewBinder {
                         }
                     }
                     launch("$TAG#bgViewModel.color") {
-                        bgViewModel.color.collect { color ->
-                            bgView.imageTintList = ColorStateList.valueOf(color)
-                        }
+                        combine(
+                                bgViewModel.color,
+                                CosFeatures.state(view.context, CosFeature.LockscreenGlass),
+                            ) { color, cos ->
+                                if (cos) android.graphics.Color.TRANSPARENT else color
+                            }
+                            .collect { color -> bgView.imageTintList = ColorStateList.valueOf(color) }
                     }
                 }
             }
