@@ -76,6 +76,41 @@ constructor(
             mediaControlChipModelLegacy
         }
 
+    private val livePlaybackInfo: Flow<PlaybackInfo?> =
+        mediaControlState
+            .flatMapLatest { state -> state.token.playbackInfoFlow(context) }
+            .distinctUntilChanged()
+
+    private val baseMediaControlChipModel: Flow<MediaControlChipModel?> =
+        combine(
+            mediaControlState,
+            livePlaybackInfo,
+            isEnabled,
+            isDynamicIslandEnabled,
+            DynamicIslandFeatureSettings.observeDynamicIslandFeatureEnabled(
+                context,
+                DynamicIslandFeatureSettings.MEDIA_CONTROLS,
+            ),
+        ) {
+            mediaControlState,
+            playbackInfo,
+            isEnabled,
+            isDynamicIslandEnabled,
+            mediaControlsEnabled ->
+                if (isEnabled && isDynamicIslandEnabled && mediaControlsEnabled) {
+                    mediaControlState.model?.withPlaybackInfo(playbackInfo)
+                } else {
+                    null
+                }
+        }
+
+    val mediaUseWaveform: StateFlow<Boolean> =
+        DynamicIslandFeatureSettings.observeDynamicIslandFeatureEnabled(
+            context,
+            "media_waveform_seekbar",
+            false,
+        ).stateIn(backgroundScope, SharingStarted.WhileSubscribed(), false)
+
     /** The currently active [MediaControlChipModel] */
     val mediaControlChipModel: StateFlow<MediaControlChipModel?> =
         combine(_mediaControlChipModel, isEnabled) { mediaControlChipModel, isEnabled ->
