@@ -4,6 +4,9 @@
  */
 
 package com.android.systemui.qs.shared.style
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 
 import android.content.Context
 import android.content.res.Resources

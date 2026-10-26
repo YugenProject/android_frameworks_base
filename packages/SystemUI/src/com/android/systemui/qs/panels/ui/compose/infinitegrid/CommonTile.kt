@@ -48,6 +48,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -445,6 +446,8 @@ object TileBounceMotionTestKeys {
     val BounceScale = MotionTestValueKey<Float>("bounceScale")
 }
 
+val LocalQsTileHeight = staticCompositionLocalOf<Dp?> { null }
+
 object CommonTileDefaults {
     val ActiveIconCornerRadius: Dp
         @Composable
@@ -513,7 +516,7 @@ object CommonTileDefaults {
     val TileHeight: Dp
         @Composable
         @ReadOnlyComposable
-        get() = dimensionResource(id = R.dimen.common_tile_default_tile_height)
+        get() = LocalQsTileHeight.current ?: dimensionResource(id = R.dimen.common_tile_default_tile_height)
 
     val ToggleTargetSize: Dp
         @Composable
