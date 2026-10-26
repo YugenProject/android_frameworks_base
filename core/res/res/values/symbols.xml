@@ -5088,6 +5088,8 @@
   <java-symbol type="dimen" name="config_defaultBinderHeavyHitterAutoSamplerThreshold" />
 
   <java-symbol type="dimen" name="default_background_blur_radius" />
+  <!-- Radius of the blur drawn behind dimmed / floating dialog windows -->
+  <java-symbol type="dimen" name="config_dialogBlurBehindRadius" />
   <java-symbol type="array" name="config_keep_warming_services" />
   <java-symbol type="string" name="config_virtual_gamepad_package_name" />
   <java-symbol type="string" name="config_virtual_gamepad_activity_name" />

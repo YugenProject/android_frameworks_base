@@ -2772,6 +2772,16 @@ public class PhoneWindow extends Window implements MenuBuilder.Callback {
 
             params.setBlurBehindRadius(a.getDimensionPixelSize(
                     android.R.styleable.Window_windowBlurBehindRadius, 0));
+        } else if (!a.hasValue(R.styleable.Window_windowBlurBehindEnabled)
+                && (params.flags & WindowManager.LayoutParams.FLAG_BLUR_BEHIND) == 0
+                && ((params.flags & WindowManager.LayoutParams.FLAG_DIM_BEHIND) != 0
+                        || mIsFloating)) {
+            // Blur whatever is behind dialogs by default. Themes can opt out with
+            // android:windowBlurBehindEnabled="false", or pick their own radius with
+            // android:windowBlurBehindRadius.
+            params.flags |= WindowManager.LayoutParams.FLAG_BLUR_BEHIND;
+            params.setBlurBehindRadius(getContext().getResources().getDimensionPixelSize(
+                    R.dimen.config_dialogBlurBehindRadius));
         }
 
         setBackgroundBlurRadius(a.getDimensionPixelSize(

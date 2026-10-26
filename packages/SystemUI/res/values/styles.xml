@@ -578,6 +578,8 @@
         <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:windowIsFloating">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBlurBehindEnabled">true</item>
+        <item name="android:windowBlurBehindRadius">@*android:dimen/config_dialogBlurBehindRadius</item>
     </style>
 
     <style name="SystemUI.Material3.Slider" parent="@style/Widget.Material3.Slider">
@@ -1113,6 +1115,8 @@
         <item name="android:dialogCornerRadius">44dp</item>
         <item name="android:colorBackground">@color/materialColorSurfaceContainerHigh
         </item>
+        <item name="android:windowBlurBehindEnabled">true</item>
+        <item name="android:windowBlurBehindRadius">@*android:dimen/config_dialogBlurBehindRadius</item>
     </style>
 
     <style name="Theme.UserSwitcherFullscreenDialog" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
