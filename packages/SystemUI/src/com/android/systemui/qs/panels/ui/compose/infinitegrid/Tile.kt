@@ -108,6 +108,7 @@ import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileHeight
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelMoreDetails
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelSettings
+import com.android.systemui.qs.shared.style.QsPanelStyle
 import com.android.systemui.qs.panels.ui.viewmodel.AccessibilityUiState
 import com.android.systemui.qs.panels.ui.viewmodel.DetailsViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.IconProvider
@@ -727,13 +728,13 @@ fun rememberQSPanelStyle(): Boolean {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
     fun readPanelStyleEnabled(): Boolean =
-        try { Settings.System.getIntForUser(contentResolver, Settings.System.QS_PANEL_STYLE, 0, UserHandle.USER_CURRENT) != 0 } catch (_: Throwable) { false }
+        try { Settings.Secure.getIntForUser(contentResolver, QsPanelStyle.SETTING_NAME, 0, UserHandle.USER_CURRENT) != 0 } catch (_: Throwable) { false }
     var classicStyleEnabled by remember { mutableStateOf(readPanelStyleEnabled()) }
     DisposableEffect(contentResolver) {
         val observer = object : ContentObserver(null) {
             override fun onChange(selfChange: Boolean) { classicStyleEnabled = readPanelStyleEnabled() }
         }
-        contentResolver.registerContentObserver(Settings.System.getUriFor(Settings.System.QS_PANEL_STYLE), false, observer, UserHandle.USER_ALL)
+        contentResolver.registerContentObserver(Settings.Secure.getUriFor(QsPanelStyle.SETTING_NAME), false, observer, UserHandle.USER_ALL)
         onDispose { contentResolver.unregisterContentObserver(observer) }
     }
     return classicStyleEnabled

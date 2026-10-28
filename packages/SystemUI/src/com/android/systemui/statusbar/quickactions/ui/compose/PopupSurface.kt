@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.android.axion.blur.AxBlurSurface
 import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.POPUP_COLOR_MODE_BLUR
 import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.POPUP_COLOR_MODE_SOLID_BLACK
 import com.android.systemui.statusbar.quickactions.popups.shared.DynamicIslandFeatureSettings.observeDynamicIslandPopupColorMode
@@ -55,10 +54,14 @@ fun PopupSurface(
 ) {
     when (colorMode) {
         POPUP_COLOR_MODE_BLUR -> {
-            AxBlurSurface(
-                modifier = modifier,
+            // Yugen: the Axion blur SDK (com.android.axion.blur) is not part of this
+            // ROM, so the blur mode renders as a translucent surface instead.
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                contentColor = Color.White,
                 shape = shape,
-                cornerRadius = 32.dp,
+                shadowElevation = shadowElevation,
+                modifier = modifier,
             ) {
                 CompositionLocalProvider(LocalContentColor provides Color.White) {
                     content()

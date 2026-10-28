@@ -61,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.compose.ui.graphics.painter.rememberDrawablePainter
-import com.android.internal.util.crdroid.OmniJawsClient
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -257,42 +256,6 @@ private fun rememberNextAlarm(): String? {
 
 @Composable
 private fun rememberWeather(): Pair<String, Drawable?>? {
-    val context = LocalContext.current
-    var weather by remember { mutableStateOf<Pair<String, Drawable?>?>(null) }
-    DisposableEffect(context) {
-        val client = OmniJawsClient.get()
-        fun apply() {
-            val info = client.weatherInfo
-            weather =
-                info?.temp?.let {
-                    "$it${info.tempUnits ?: ""}" to
-                        client.getWeatherConditionImage(context, info.conditionCode)
-                }
-        }
-        val observer =
-            object : OmniJawsClient.OmniJawsObserver {
-                override fun weatherUpdated() = apply()
-
-                override fun weatherError(errorReason: Int) {
-                    if (errorReason == OmniJawsClient.EXTRA_ERROR_DISABLED) weather = null
-                }
-            }
-        if (client.isOmniJawsEnabled(context)) {
-            client.addObserver(context, observer)
-            apply()
-        }
-        onDispose { client.removeObserver(context, observer) }
-    }
-    androidx.compose.runtime.LaunchedEffect(context) {
-        val client = OmniJawsClient.get()
-        if (!client.isOmniJawsEnabled(context)) return@LaunchedEffect
-        withContext(Dispatchers.IO) { client.queryWeather(context) }
-        val info = client.weatherInfo ?: return@LaunchedEffect
-        weather =
-            info.temp?.let {
-                "$it${info.tempUnits ?: ""}" to
-                    client.getWeatherConditionImage(context, info.conditionCode)
-            }
-    }
-    return weather
+    // Yugen: OmniJaws is not part of this ROM, so the lockscreen weather widget stays hidden.
+    return null
 }

@@ -20,7 +20,7 @@
 <!--    android:background="@drawable/status_bar_closed_default_background" -->
 <com.android.systemui.statusbar.phone.PhoneStatusBarView
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:systemui="http://schemas.android.com/apk/res-auto"
+    xmlns:systemui="http://schemas.android.com/apk/res/com.android.systemui"
     android:layout_width="match_parent"
     android:layout_height="@dimen/status_bar_height"
     android:id="@+id/status_bar"
@@ -90,16 +90,6 @@
                         android:layout_height="match_parent"
                         android:layout="@layout/operator_name" />
 
-                    <com.android.systemui.crdroid.logo.LogoImageView
-                        android:id="@+id/statusbar_logo"
-                        android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
-                        android:layout_gravity="center_vertical"
-                        android:paddingStart="@dimen/status_bar_left_clock_starting_padding"
-                        android:paddingEnd="@dimen/status_bar_left_clock_end_padding"
-                        android:scaleType="centerInside"
-                        android:visibility="gone" />
-
                     <com.android.systemui.statusbar.policy.Clock
                         android:id="@+id/clock"
                         android:layout_width="wrap_content"
@@ -111,7 +101,6 @@
                         android:paddingStart="@dimen/status_bar_left_clock_starting_padding"
                         android:paddingEnd="@dimen/status_bar_left_clock_end_padding"
                         android:gravity="center_vertical|start"
-                        systemui:isStatusBar="true"
                     />
 
                     <!-- To avoid chips causing notifs to re-layout, wrap them in a FrameLayout
@@ -179,6 +168,23 @@
                 android:gravity="center_vertical|end"
                 android:clipChildren="false">
 
+                <com.android.systemui.statusbar.LineageStatusBarItemHolder
+                    android:id="@+id/network_traffic_holder_end"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layoutDirection="ltr"
+                    android:gravity="center"
+                    android:paddingLeft="2dp">
+
+                    <org.lineageos.internal.statusbar.NetworkTraffic
+                        android:id="@+id/network_traffic_end"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:maxLines="2"
+                        android:gravity="center" />
+
+                </com.android.systemui.statusbar.LineageStatusBarItemHolder>
+
                 <include
                     android:id="@+id/user_switcher_container"
                     android:layout_width="wrap_content"
@@ -190,15 +196,6 @@
                      android:layout_gravity="center_vertical"
                      android:layout_width="wrap_content"
                      android:layout_height="@dimen/status_bar_icon_container_height" />
-
-                <com.android.systemui.crdroid.logo.LogoImageViewRight
-                    android:id="@+id/statusbar_logo_right"
-                    android:layout_width="wrap_content"
-                    android:layout_height="@dimen/status_bar_icon_container_height"
-                    android:paddingStart="@dimen/status_bar_left_clock_end_padding"
-                    android:paddingEnd="@dimen/status_bar_left_clock_starting_padding"
-                    android:scaleType="centerInside"
-                    android:visibility="gone" />
             </com.android.keyguard.AlphaOptimizedLinearLayout>
         </FrameLayout>
     </LinearLayout>
@@ -223,14 +220,24 @@
             android:singleLine="true"
             android:gravity="center"
             android:visibility="gone"
-            systemui:isStatusBar="true"
         />
 
-    </com.android.keyguard.AlphaOptimizedLinearLayout>
+        <com.android.systemui.statusbar.LineageStatusBarItemHolder
+            android:id="@+id/network_traffic_holder_center"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layoutDirection="ltr"
+            android:gravity="center">
 
-    <com.android.systemui.crdroid.batterybar.BatteryBarController
-        android:id="@+id/battery_bar"
-        android:layout_width="match_parent"
-        android:layout_height="1dp" />
+            <org.lineageos.internal.statusbar.NetworkTraffic
+                android:id="@+id/network_traffic_center"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:maxLines="2"
+                android:gravity="center" />
+
+        </com.android.systemui.statusbar.LineageStatusBarItemHolder>
+
+    </com.android.keyguard.AlphaOptimizedLinearLayout>
 
 </com.android.systemui.statusbar.phone.PhoneStatusBarView>

@@ -68,7 +68,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import android.provider.Settings
 import android.os.UserHandle
-import com.android.internal.util.crdroid.Utils
 
 object DeviceEntryIconViewBinder {
     private const val TAG = "DeviceEntryIconViewBinder"
@@ -100,9 +99,13 @@ object DeviceEntryIconViewBinder {
     ): DisposableHandle {
         val disposables = DisposableHandles()
 
-        val packageInstalled = Utils.isPackageInstalled(
-            view.context, "com.crdroid.udfps.icons"
-        )
+        val packageInstalled =
+            try {
+                view.context.packageManager.getPackageInfo("com.crdroid.udfps.icons", 0)
+                true
+            } catch (e: Exception) {
+                false
+            }
 
         val tunerScope =
             CoroutineScope(

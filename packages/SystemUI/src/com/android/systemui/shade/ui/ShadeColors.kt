@@ -39,7 +39,11 @@ object ShadeColors {
     @JvmStatic
     fun shadePanel(context: Context, blurSupported: Boolean, withScrim: Boolean): Int {
         return if (blurSupported) {
-            if (withScrim) {
+            if (withScrim && LiquidGlass.enabled(context).value) {
+                LIQUID_GLASS_DIM
+            } else if (LiquidGlass.enabled(context).value) {
+                LIQUID_GLASS_PANEL
+            } else if (withScrim) {
                 ColorUtils.compositeColors(
                     shadePanelStandard(context),
                     shadePanelScrimBehind(context),
@@ -63,6 +67,7 @@ object ShadeColors {
 
     @JvmStatic
     fun shadePanelScrimBehind(context: Context): Int {
+        if (LiquidGlass.enabled(context).value) return LIQUID_GLASS_SCRIM
         return context.resources.getColor(
             com.android.internal.R.color.shade_panel_scrim,
             context.theme,
@@ -101,8 +106,7 @@ object ShadeColors {
 
     @JvmStatic
     private fun shadePanelFallback(context: Context): Int {
-        return ColorUtils.blendARGB(context.getColor(R.color.shade_panel_fallback_fg),
-            context.getColor(R.color.shade_panel_fallback_bg), 0.7f)
+        return context.getColor(R.color.shade_panel_fallback)
     }
 
     @JvmStatic
@@ -115,7 +119,6 @@ object ShadeColors {
 
     @JvmStatic
     private fun notificationScrimFallback(context: Context): Int {
-        return ColorUtils.blendARGB(context.getColor(R.color.notification_scrim_base),
-            context.getColor(R.color.shade_panel_fallback_bg), 0.7f)
+        return context.getColor(R.color.notification_scrim_fallback)
     }
 }
