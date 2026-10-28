@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import com.android.internal.graphics.drawable.BackgroundBlurDrawable
 import com.android.systemui.common.shared.model.Icon
+import com.android.systemui.common.ui.view.BackgroundBlurCompat
 import com.android.systemui.res.R
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -700,7 +701,7 @@ fun Modifier.glassBlurRegion(shape: Shape, material: Int = 0): Modifier {
                     else -> 0f
                 }
             blur.setVisible(true, false)
-            blur.setMaterial(material)
+            BackgroundBlurCompat.setMaterial(blur, material)
             blur.setColor(0)
             blur.setBlurRadius(radius)
             blur.setCornerRadius(minOf(corner, shown.height / 2f))

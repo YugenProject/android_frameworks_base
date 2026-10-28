@@ -45,6 +45,7 @@ import com.android.internal.graphics.drawable.BackgroundBlurDrawable;
 import com.android.internal.util.ContrastColorUtil;
 import com.android.systemui.Dumpable;
 import com.android.systemui.common.shared.colors.SurfaceEffectColors;
+import com.android.systemui.common.ui.view.BackgroundBlurCompat;
 import com.android.systemui.penguin.CosFeature;
 import com.android.systemui.penguin.CosFeatures;
 import com.android.systemui.qs.shared.style.LiquidGlass;
@@ -455,7 +456,9 @@ public class NotificationBackgroundView extends View implements Dumpable,
                     & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
             mCosMaterial = mHeadsUpGlass ? (dark ? 9 : 10) : (dark ? 7 : 8);
         }
-        mBackgroundBlurDrawable.setMaterial(mCosMaterial);
+        if (!BackgroundBlurCompat.setMaterial(mBackgroundBlurDrawable, mCosMaterial)) {
+            mCosMaterial = 0;
+        }
         mBackgroundBlurDrawable.setBlurRadius(mCosMaterial >= 9
                 ? Math.round(COS_HEADS_UP_BLUR_DP * getResources().getDisplayMetrics().density)
                 : getResources().getDimensionPixelSize(
