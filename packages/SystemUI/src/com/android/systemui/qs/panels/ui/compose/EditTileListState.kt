@@ -22,10 +22,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.geometry.Offset
+import com.android.systemui.penguin.QsEditMode
 import com.android.systemui.qs.panels.shared.model.SizedTile
 import com.android.systemui.qs.panels.shared.model.SizedTileImpl
 import com.android.systemui.qs.panels.ui.compose.selection.PlacementEvent
 import com.android.systemui.qs.panels.ui.model.GridCell
+import com.android.systemui.qs.panels.ui.model.SpacerGridCell
 import com.android.systemui.qs.panels.ui.model.TileGridCell
 import com.android.systemui.qs.panels.ui.model.toGridCells
 import com.android.systemui.qs.panels.ui.viewmodel.EditTileViewModel
@@ -40,7 +42,11 @@ class EditTileListState(
     initialLargeTiles: Set<TileSpec>,
     val columns: Int,
     val largeTilesSpan: Int,
+    val fullWidthSpecs: Set<TileSpec> = emptySet(),
+    private val edit: QsEditMode? = null,
 ) : DragAndDropState {
+    private val elementSpecs: Set<TileSpec> = edit?.elementSpecs ?: emptySet()
+
     override var draggedCell by mutableStateOf<SizedTile<EditTileViewModel>?>(null)
         private set
 
@@ -77,7 +83,19 @@ class EditTileListState(
     }
 
     fun tileSpecs(): List<TileSpec> {
-        return _tiles.filterIsInstance<TileGridCell>().map { it.tile.tileSpec }
+        val specs = mutableListOf<TileSpec>()
+        val buffer = mutableListOf<TileSpec>()
+        _tiles.filterIsInstance<TileGridCell>().forEach { cell ->
+            if (cell.hoistedBefore) {
+                buffer.add(cell.tile.tileSpec)
+            } else {
+                specs.add(cell.tile.tileSpec)
+                specs.addAll(buffer)
+                buffer.clear()
+            }
+        }
+        specs.addAll(buffer)
+        return specs
     }
 
     /**
@@ -115,13 +133,20 @@ class EditTileListState(
         val fromIndex = indexOf(tileSpec)
         if (fromIndex != INVALID_INDEX) {
             val cell = _tiles[fromIndex] as TileGridCell
+            val width = if (toIcon) smallWidth(tileSpec) else largeWidth(tileSpec)
 
-            if (cell.isIcon == toIcon) return
+            if (cell.width == width) return
 
-            _tiles[fromIndex] = cell.copy(width = if (toIcon) 1 else largeTilesSpan)
+            _tiles[fromIndex] = cell.copy(width = width)
             regenerateGrid(fromIndex)
         }
     }
+
+    fun smallWidth(tileSpec: TileSpec): Int =
+        if (tileSpec in elementSpecs) largeTilesSpan else 1
+
+    fun largeWidth(tileSpec: TileSpec): Int =
+        if (tileSpec in elementSpecs) columns else largeTilesSpan
 
     override fun isMoving(tileSpec: TileSpec): Boolean {
         return draggedCell?.let { it.tile.tileSpec == tileSpec } ?: false
@@ -217,15 +242,29 @@ class EditTileListState(
     }
 
     private fun List<EditTileViewModel>.toGridCells(largeTiles: Set<TileSpec>): List<GridCell> {
-        return map {
-                SizedTileImpl(it, if (largeTiles.contains(it.tileSpec)) largeTilesSpan else 1)
+        val sized =
+            map {
+                SizedTileImpl(
+                    it,
+                    if (it.tileSpec in elementSpecs) {
+                        if (it.tileSpec in fullWidthSpecs) columns else largeTilesSpan
+                    } else if (largeTiles.contains(it.tileSpec)) {
+                        largeTilesSpan
+                    } else {
+                        1
+                    },
+                )
             }
-            .toGridCells(columns)
+
+        return sized.toRows()
     }
+
+    private fun List<SizedTile<EditTileViewModel>>.toRows(startingRow: Int = 0): List<GridCell> =
+        edit?.rows(this, columns, startingRow) ?: toGridCells(columns, startingRow)
 
     /** Regenerate the list of [GridCell] with their new potential rows */
     private fun regenerateGrid() {
-        _tiles.filterIsInstance<TileGridCell>().toGridCells(columns).let {
+        _tiles.filterIsInstance<TileGridCell>().toRows().let {
             _tiles.clear()
             _tiles.addAll(it)
         }
@@ -238,7 +277,7 @@ class EditTileListState(
     private fun regenerateGrid(fromIndex: Int) {
         val fromRow = _tiles[fromIndex].row
         val (pre, post) = _tiles.partition { it.row < fromRow }
-        post.filterIsInstance<TileGridCell>().toGridCells(columns, startingRow = fromRow).let {
+        post.filterIsInstance<TileGridCell>().toRows(startingRow = fromRow).let {
             _tiles.clear()
             _tiles.addAll(pre)
             _tiles.addAll(it)

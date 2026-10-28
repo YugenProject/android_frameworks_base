@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,8 @@ import com.android.systemui.qs.composefragment.ui.GridAnchor
 import com.android.systemui.qs.panels.ui.compose.TileGrid
 import com.android.systemui.qs.shared.ui.QuickSettings.Elements
 import com.android.systemui.qs.ui.viewmodel.QuickSettingsContainerViewModel
+import com.android.systemui.penguin.LocalQsPanels
+import com.android.systemui.penguin.QsPanelsHost
 import com.android.systemui.res.R
 import kotlinx.coroutines.flow.filterNotNull
 
@@ -55,6 +58,13 @@ fun ContentScope.QuickSettingsContent(
     modifier: Modifier = Modifier,
     mediaSquishiness: () -> Float = { 1f },
 ) {
+    val penguin = viewModel.penguin
+    if (penguin != null) {
+        CompositionLocalProvider(LocalQsPanels provides QsPanelsHost(penguin, viewModel)) {
+            with(penguin) { Content(viewModel, mediaInRow, modifier, mediaSquishiness) }
+        }
+        return
+    }
     QuickSettingsPanelLayout(
         brightness =
             @Composable {

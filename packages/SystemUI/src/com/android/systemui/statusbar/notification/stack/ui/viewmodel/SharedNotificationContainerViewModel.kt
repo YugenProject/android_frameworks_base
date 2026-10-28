@@ -19,6 +19,7 @@ package com.android.systemui.statusbar.notification.stack.ui.viewmodel
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.view.View
 import android.view.WindowInsets.Type.defaultVisible
 import androidx.annotation.VisibleForTesting
@@ -96,6 +97,7 @@ import com.android.systemui.log.table.logDiffsForTable
 import com.android.systemui.media.controls.domain.pipeline.MediaDataManager
 import com.android.systemui.media.controls.shared.model.MediaData
 import com.android.systemui.notifications.ui.NotificationPlaceholderStateStorage
+import com.android.systemui.penguin.isCosShadeSwitch
 import com.android.systemui.res.R
 import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
@@ -323,8 +325,14 @@ constructor(
                                 }
                             }
 
+                        val sideways =
+                            shadeMode is Dual &&
+                                !isFullWidthShade &&
+                                configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+                                configuration.smallestScreenWidthDp < 600
+
                         val (marginStart, marginEnd) =
-                            if (shadeMode is Single) {
+                            if (shadeMode is Single || sideways) {
                                 marginHorizontal to marginHorizontal
                             } else {
                                 when (horizontalAlignment) {
@@ -344,9 +352,12 @@ constructor(
                             }
 
                         val horizontalPosition =
-                            when (horizontalAlignment) {
-                                Alignment.Start -> HorizontalPosition.EdgeToMiddle(maxWidth)
-                                Alignment.End -> HorizontalPosition.MiddleToEdge(maxWidth)
+                            when {
+                                sideways -> HorizontalPosition.EdgeToEdge
+                                horizontalAlignment == Alignment.Start ->
+                                    HorizontalPosition.EdgeToMiddle(maxWidth)
+                                horizontalAlignment == Alignment.End ->
+                                    HorizontalPosition.MiddleToEdge(maxWidth)
                                 else -> HorizontalPosition.EdgeToEdge
                             }
 
@@ -621,8 +632,15 @@ constructor(
                                     } else {
                                         // On a narrow screen, the QS shade overlaps with
                                         // lockscreen notifications. Fade them out as the QS
-                                        // shade expands.
-                                        emitAll(shadeInteractor.qsExpansion.map { 1f - it })
+                                        emitAll(
+                                            combine(
+                                                shadeInteractor.qsExpansion,
+                                                sceneInteractor.transitionStateFlow,
+                                            ) { qsExpansion, state ->
+                                                if (state.isCosShadeSwitch()) 1f
+                                                else 1f - qsExpansion
+                                            }
+                                        )
                                     }
                                 }
                     }

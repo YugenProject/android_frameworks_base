@@ -318,6 +318,7 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
         if (mBackgroundColorAnimator != null) {
             mBackgroundColorAnimator.cancel();
         }
+        mBackgroundNormal.setBlurBackgroundEnabled(usesBlurredBackground());
         int rippleColor = getRippleColor();
         mBackgroundNormal.setRippleColor(rippleColor);
         int color = calculateBgColor();
@@ -372,7 +373,13 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
     }
 
     protected boolean usesBlurredBackground() {
-        return usesTransparentBackground() && lockscreenBlurForNotifications();
+        return usesTransparentBackground() && lockscreenBlurForNotifications()
+                && mBgTint == NO_COLOR
+                && (mOnKeyguard || blursAsHeadsUp());
+    }
+
+    protected boolean blursAsHeadsUp() {
+        return false;
     }
 
     protected boolean usesTransparentBackground() {

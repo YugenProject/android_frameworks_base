@@ -22,18 +22,23 @@ import com.android.systemui.display.data.repository.DisplayTypeRepository
 import com.android.systemui.lifecycle.HydratedActivatable
 import com.android.systemui.media.controls.domain.pipeline.interactor.MediaCarouselInteractor
 import com.android.systemui.media.controls.ui.controller.MediaHierarchyManager.Companion.LOCATION_QS
+import com.android.systemui.media.remedia.domain.interactor.MediaInteractor
 import com.android.systemui.media.remedia.ui.compose.MediaUiBehavior
 import com.android.systemui.media.remedia.ui.viewmodel.MediaCarouselVisibility
 import com.android.systemui.media.remedia.ui.viewmodel.MediaViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.DetailsViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
+import com.android.systemui.qs.panels.ui.viewmodel.toolbar.EditModeButtonViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.MediaInRowInLandscapeViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.TileGridViewModel
+import com.android.systemui.penguin.QsPanels
 import com.android.systemui.shade.ShadeDisplayAware
+import com.android.systemui.statusbar.NotificationShadeWindowController
 import com.android.systemui.shade.ui.viewmodel.ShadeHeaderViewModel
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import java.util.Optional
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -46,12 +51,18 @@ constructor(
     tileGridViewModelFactory: TileGridViewModel.Factory,
     @Assisted private val supportsBrightnessMirroring: Boolean,
     val editModeViewModel: EditModeViewModel,
+    val editModeButtonViewModelFactory: EditModeButtonViewModel.Factory,
     val detailsViewModel: DetailsViewModel,
     private val mediaCarouselInteractor: MediaCarouselInteractor,
+    private val mediaInteractor: MediaInteractor,
     val mediaViewModelFactory: MediaViewModel.Factory,
     mediaInRowInLandscapeViewModelFactory: MediaInRowInLandscapeViewModel.Factory,
     @ShadeDisplayAware shadeDisplayTypeRepository: DisplayTypeRepository,
+    qsPanels: Optional<QsPanels>,
+    private val shadeWindowController: NotificationShadeWindowController,
 ) : HydratedActivatable() {
+
+    val penguin: QsPanels? = qsPanels.orElse(null)
 
     val isBrightnessSliderVisible by
         shadeDisplayTypeRepository.displayType
@@ -73,8 +84,13 @@ constructor(
 
     val showMedia: Boolean by mediaCarouselInteractor.hasAnyMedia.hydratedStateOf()
 
+    val hasMediaCards: Boolean
+        get() = mediaInteractor.hasAnyMedia
+
     val showMediaInRow: Boolean
         get() = qsMediaInRowViewModel.shouldMediaShowInRow
+
+    fun setTextInputActive(active: Boolean) = shadeWindowController.setShadeNeedsInput(active)
 
     fun onMediaSwipeToDismiss() = mediaCarouselInteractor.onSwipeToDismiss()
 

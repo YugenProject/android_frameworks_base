@@ -19,6 +19,7 @@ package com.android.systemui.keyguard.ui.binder
 
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.drawable.Animatable2
 import android.graphics.drawable.LayerDrawable
 import android.util.Size
@@ -27,6 +28,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.core.animation.CycleInterpolator
 import androidx.core.animation.ObjectAnimator
+import androidx.core.view.doOnDetach
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -45,6 +47,8 @@ import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardQuickAffordanceHapticViewModel
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardQuickAffordanceViewModel
 import com.android.systemui.lifecycle.repeatWhenAttached
+import com.android.systemui.penguin.CosFeature
+import com.android.systemui.penguin.CosFeatures
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.VibratorHelper
@@ -73,6 +77,7 @@ constructor(
     private val EXIT_DOZE_BUTTON_REVEAL_ANIMATION_DURATION_MS = 250L
     private val SCALE_SELECTED_BUTTON = 1.23f
     private val DIM_ALPHA = 0.3f
+    private val COS_ACTIVE_FILL = Color.argb(230, 255, 255, 255)
     private val TAG = "KeyguardQuickAffordanceViewBinder"
 
     /**
@@ -111,6 +116,18 @@ constructor(
                     val surfaceDrawable = view.background
                     view.background = LayerDrawable(arrayOf(blurDrawable, surfaceDrawable))
                 }
+                if (enableLockscreenBlur()) {
+                    // The blur region only knows the drawable's own alpha: follow the alpha the
+                    // button is really drawn with (keyguard root fade on unlock, shade drag) so
+                    // the blur does not outlive the button.
+                    val blurAlphaSync =
+                        BackgroundBlurAlphaSync(view, { cornerRadius }) {
+                                (view.background as? LayerDrawable)?.getDrawable(0)
+                                    as? BackgroundBlurDrawable
+                            }
+                            .start()
+                    view.doOnDetach { blurAlphaSync.dispose() }
+                }
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     launch {
                         viewModel.collect { buttonModel ->
@@ -141,10 +158,12 @@ constructor(
                             combine(
                                 windowRootViewBlurInteractor.isBlurCurrentlySupported,
                                 viewModel,
-                                { isSupported, viewModel ->
-                                    updateBackground(viewModel, view, isSupported)
+                                CosFeatures.state(view.context, CosFeature.LockscreenGlass),
+                                { isSupported, viewModel, cos ->
+                                    updateBackground(viewModel, view, isSupported, cos)
                                 },
                             )
+                            .collect {}
                         }
                     }
                 }
@@ -166,7 +185,20 @@ constructor(
         viewModel: KeyguardQuickAffordanceViewModel,
         view: View,
         isBlurSupported: Boolean,
+        cos: Boolean,
     ) {
+        if (cos && enableLockscreenBlur() && view.background is LayerDrawable) {
+            val layers = view.background as LayerDrawable
+            layers.getDrawable(0).setVisible(isBlurSupported && !viewModel.isActivated, false)
+            layers
+                .getDrawable(1)
+                .setTintList(
+                    ColorStateList.valueOf(
+                        if (viewModel.isActivated) COS_ACTIVE_FILL else Color.TRANSPARENT
+                    )
+                )
+            return
+        }
         if (enableLockscreenBlur() && view.background is LayerDrawable) {
             val blurDrawable =
                 (view.background as LayerDrawable).getDrawable(0) as BackgroundBlurDrawable
@@ -237,6 +269,7 @@ constructor(
             viewModel,
             view,
             windowRootViewBlurInteractor.isBlurCurrentlySupported.value,
+            CosFeatures.isOn(view.context, CosFeature.LockscreenGlass),
         )
 
         view

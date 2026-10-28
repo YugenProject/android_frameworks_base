@@ -87,10 +87,25 @@ constructor(
             }
             .stateIn(backgroundScope, SharingStarted.WhileSubscribed(), null)
 
-    /**
-     * The media control chip may not be enabled on all form factors, so only the relevant form
-     * factors should initialize the interactor. This must be called from a CoreStartable.
-     */
+    val mediaUseWaveform: StateFlow<Boolean> =
+        DynamicIslandFeatureSettings.observeDynamicIslandFeatureEnabled(
+            context,
+            "media_waveform_seekbar",
+            false,
+        ).stateIn(backgroundScope, SharingStarted.WhileSubscribed(), false)
+
+    /** The currently active [MediaControlChipModel] */
+    val mediaControlChipModel: StateFlow<MediaControlChipModel?> =
+        combine(
+            baseMediaControlChipModel,
+            currentLyrics,
+            currentSyncedLyrics,
+        ) { baseModel, lyrics, syncedLyrics ->
+            baseModel?.copy(lyrics = lyrics, syncedLyrics = syncedLyrics)
+        }
+        .stateIn(backgroundScope, SharingStarted.WhileSubscribed(), null)
+
+    /** Initializes setting observation. This must be called from a CoreStartable. */
     fun initialize() {
         isEnabled.value = true
     }

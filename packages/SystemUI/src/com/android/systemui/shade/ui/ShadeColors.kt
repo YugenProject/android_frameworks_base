@@ -17,10 +17,17 @@
 package com.android.systemui.shade.ui
 
 import android.content.Context
+import android.graphics.Color
 import com.android.internal.graphics.ColorUtils
+import com.android.systemui.qs.shared.style.LiquidGlass
+import com.android.systemui.qs.shared.style.LiquidGlassTune
 import com.android.systemui.res.R
 
 object ShadeColors {
+    private val LIQUID_GLASS_DIM get() = LiquidGlassTune.color("dim", 0x52000000)
+    private val LIQUID_GLASS_SCRIM get() = LiquidGlassTune.color("scrim", 0x8C000000.toInt())
+    private val LIQUID_GLASS_PANEL get() = LiquidGlassTune.color("panel", 0x14000000)
+
     /**
      * Calculate notification shade panel color.
      *
@@ -48,7 +55,7 @@ object ShadeColors {
     @JvmStatic
     fun notificationScrim(context: Context, blurSupported: Boolean): Int {
         return if (blurSupported) {
-            notificationScrimStandard(context)
+            Color.TRANSPARENT
         } else {
             notificationScrimFallback(context)
         }
@@ -80,9 +87,7 @@ object ShadeColors {
             // SplitShade (avoid adding the shade panel with scrim)
             return surfaceEffect0Color
         }
-        // SingleShade
-        val shadePanelWithScrim = shadePanel(context, blurSupported, withScrim = true)
-        return ColorUtils.compositeColors(surfaceEffect0Color, shadePanelWithScrim)
+        return shadePanel(context, blurSupported, withScrim = true)
     }
 
     @JvmStatic
@@ -96,7 +101,8 @@ object ShadeColors {
 
     @JvmStatic
     private fun shadePanelFallback(context: Context): Int {
-        return context.getColor(R.color.shade_panel_fallback)
+        return ColorUtils.blendARGB(context.getColor(R.color.shade_panel_fallback_fg),
+            context.getColor(R.color.shade_panel_fallback_bg), 0.7f)
     }
 
     @JvmStatic
@@ -109,6 +115,7 @@ object ShadeColors {
 
     @JvmStatic
     private fun notificationScrimFallback(context: Context): Int {
-        return context.getColor(R.color.notification_scrim_fallback)
+        return ColorUtils.blendARGB(context.getColor(R.color.notification_scrim_base),
+            context.getColor(R.color.shade_panel_fallback_bg), 0.7f)
     }
 }

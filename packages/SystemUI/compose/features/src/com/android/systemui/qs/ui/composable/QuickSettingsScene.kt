@@ -88,6 +88,7 @@ import com.android.systemui.qs.panels.ui.compose.EditMode
 import com.android.systemui.qs.shared.ui.QuickSettings
 import com.android.systemui.qs.ui.composable.QuickSettingsScene.Companion.InternalScenes.Edit
 import com.android.systemui.qs.ui.composable.QuickSettingsScene.Companion.InternalScenes.QS
+import com.android.systemui.penguin.QsPanelsHostScope
 import com.android.systemui.qs.ui.viewmodel.QuickSettingsSceneContentViewModel
 import com.android.systemui.qs.ui.viewmodel.QuickSettingsUserActionsViewModel
 import com.android.systemui.res.R
@@ -264,34 +265,50 @@ private fun ContentScope.QuickSettingsScene(
             }
         }
 
-        NestedSceneTransitionLayout(
-            state = sceneState,
-            debugName = "QuickSettingsScene",
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            scene(QS) {
-                Element(QS.rootElementKey, Modifier) {
-                    QuickSettingsContent(
-                        Modifier,
-                        viewModel,
-                        headerViewModel,
-                        this@QuickSettingsScene.verticalOverscrollEffect,
-                    )
+        QsPanelsHostScope(viewModel.qsContainerViewModel) {
+            NestedSceneTransitionLayout(
+                state = sceneState,
+                debugName = "QuickSettingsScene",
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                scene(QS) {
+                    Element(QS.rootElementKey, Modifier) {
+                        QuickSettingsContent(
+                            Modifier,
+                            viewModel,
+                            headerViewModel,
+                            this@QuickSettingsScene.verticalOverscrollEffect,
+                        )
+                    }
                 }
-            }
 
-            scene(Edit) {
-                Element(Edit.rootElementKey, Modifier) {
-                    GridAnchor()
-                    EditMode(
-                        viewModel.qsContainerViewModel.editModeViewModel,
-                        Modifier.testTag("edit_mode_scene")
-                            .padding(horizontal = QuickSettingsShade.Dimensions.HorizontalPadding)
-                            .padding(
-                                top =
-                                    headerViewModel.statusBarHeightPx.toDp(LocalContext.current).dp
-                            ),
-                    )
+                scene(Edit) {
+                    Element(Edit.rootElementKey, Modifier) {
+                        GridAnchor()
+                        val penguinEditor =
+                            viewModel.qsContainerViewModel.penguin?.run {
+                                OverlayEditor(
+                                    viewModel.qsContainerViewModel,
+                                    Modifier.padding(
+                                        top =
+                                            headerViewModel.statusBarHeightPx
+                                                .toDp(LocalContext.current)
+                                                .dp
+                                    ),
+                                )
+                            } == true
+                        if (!penguinEditor) {
+                            EditMode(
+                                viewModel.qsContainerViewModel.editModeViewModel,
+                                Modifier.testTag("edit_mode_scene")
+                                    .padding(horizontal = QuickSettingsShade.Dimensions.HorizontalPadding)
+                                    .padding(
+                                        top =
+                                            headerViewModel.statusBarHeightPx.toDp(LocalContext.current).dp
+                                    ),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -440,6 +457,7 @@ private fun ContentScope.QuickSettingsContent(
                 viewModel = footerActionsViewModel,
                 isCustomizing = false,
                 customizingAnimationDuration = 0,
+                extraAction = { viewModel.qsContainerViewModel.penguin?.FooterAction(viewModel.qsContainerViewModel) },
                 modifier =
                     Modifier.align(Alignment.CenterHorizontally)
                         .sysuiResTag("qs_footer_actions")

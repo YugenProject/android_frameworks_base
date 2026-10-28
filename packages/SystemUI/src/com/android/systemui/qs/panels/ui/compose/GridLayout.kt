@@ -40,7 +40,15 @@ interface GridLayout {
         modifier: Modifier,
         listening: () -> Boolean,
         enableRevealEffect: Boolean,
+        belowTiles: @Composable () -> Unit = {},
+        columnsOverride: Int? = null,
+        forceLargeTiles: Boolean = false,
     )
+
+    @Composable
+    fun TileSizing(content: @Composable (Set<TileSpec>, (TileSpec, Boolean) -> Unit) -> Unit) {
+        content(emptySet()) { _, _ -> }
+    }
 
     @Composable
     fun EditTileGrid(

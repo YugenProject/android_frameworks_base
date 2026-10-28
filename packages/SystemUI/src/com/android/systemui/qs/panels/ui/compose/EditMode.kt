@@ -24,6 +24,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
+import androidx.compose.ui.platform.LocalContext
+import com.android.systemui.penguin.LocalQsPanels
 
 @Composable
 fun EditMode(viewModel: EditModeViewModel, modifier: Modifier = Modifier) {
@@ -34,13 +36,23 @@ fun EditMode(viewModel: EditModeViewModel, modifier: Modifier = Modifier) {
 
     DisposableEffect(Unit) { onDispose { viewModel.stopEditing() } }
 
+    val edit = LocalQsPanels.current?.panels?.editMode
+    if (edit?.Takeover(viewModel, tiles, gridLayout, modifier) == true) return
+    val context = LocalContext.current
+
     Column(modifier) {
         gridLayout.EditTileGrid(
-            tiles,
+            edit?.tiles(tiles) ?: tiles,
             Modifier,
             viewModel::addTile,
-            viewModel::removeTile,
-            viewModel::setTiles,
+            { spec ->
+                if (edit != null) edit.remove(context, spec, viewModel::removeTile)
+                else viewModel.removeTile(spec)
+            },
+            { specs ->
+                if (edit != null) edit.commit(context, specs, viewModel::setTiles)
+                else viewModel.setTiles(specs)
+            },
             viewModel::stopEditing,
         )
     }

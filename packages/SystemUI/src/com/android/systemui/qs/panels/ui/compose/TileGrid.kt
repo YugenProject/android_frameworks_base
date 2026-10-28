@@ -19,6 +19,7 @@ package com.android.systemui.qs.panels.ui.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.android.compose.animation.scene.ContentScope
+import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.panels.ui.viewmodel.TileGridViewModel
 
 /**
@@ -30,17 +31,29 @@ import com.android.systemui.qs.panels.ui.viewmodel.TileGridViewModel
 fun ContentScope.TileGrid(
     viewModel: TileGridViewModel,
     modifier: Modifier = Modifier,
+    excludeSpecs: List<TileSpec> = emptyList(),
+    includeSpecs: List<TileSpec>? = null,
+    columnsOverride: Int? = null,
+    forceLargeTiles: Boolean = false,
     listening: () -> Boolean = { true },
     enableRevealEffect: Boolean = false,
+    belowTiles: @Composable () -> Unit = {},
 ) {
     val gridLayout = viewModel.gridLayout
-    val tiles = viewModel.tileViewModels
+    val tiles =
+        viewModel.tileViewModels.filter {
+            (includeSpecs == null || includeSpecs.contains(it.spec)) &&
+                !excludeSpecs.contains(it.spec)
+        }
     with(gridLayout) {
         TileGrid(
             tiles = tiles,
             modifier = modifier,
             listening = listening,
             enableRevealEffect = enableRevealEffect,
+            belowTiles = belowTiles,
+            columnsOverride = columnsOverride,
+            forceLargeTiles = forceLargeTiles,
         )
     }
 }

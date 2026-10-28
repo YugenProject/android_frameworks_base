@@ -94,6 +94,7 @@ import com.android.internal.policy.SystemBarUtils;
 import com.android.keyguard.BouncerPanelExpansionCalculator;
 import com.android.keyguard.KeyguardSliceView;
 import com.android.systemui.Dependency;
+import com.android.systemui.qs.shared.style.LiquidGlass;
 import com.android.systemui.Dumpable;
 import com.android.systemui.ExpandHelper;
 import com.android.systemui.notifications.ui.YSpace;
@@ -551,6 +552,12 @@ public class NotificationStackScrollLayout
 
     /** Radius of the blur effect applied to the content of the NSSL. */
     private float mBlurRadius = 0f;
+    private float mBlurFade = 1f;
+    private NotificationGlassPress mGlassPress;
+    private long mLastInsertTime;
+    private boolean mTouchDuringInsert;
+    private float mInsertTouchX;
+    private float mInsertTouchY;
     @Nullable private RenderEffect mBlurEffect = null;
 
     /**
@@ -974,8 +981,8 @@ public class NotificationStackScrollLayout
         mStackScrollAlgorithm.initView(context);
         mStateAnimator.initView(context);
         mAmbientState.reload(context);
-        mPaddingBetweenElements = Math.max(1,
-                res.getDimensionPixelSize(R.dimen.notification_divider_height));
+        mPaddingBetweenElements = Math.max(1, LiquidGlass.notificationGap(res,
+                res.getDimensionPixelSize(R.dimen.notification_divider_height)));
         mMinimumSpacingBetweenChildren = Math.max(1,
                 res.getDimensionPixelSize(R.dimen.notification_minimum_spacing_between_children));
         mMinTopOverScrollToEscape = res.getDimensionPixelSize(
@@ -3572,6 +3579,9 @@ public class NotificationStackScrollLayout
     }
 
     public void generateAddAnimation(ExpandableView child, boolean fromMoreCard) {
+        if (mIsExpanded && !isFullyHidden()) {
+            mLastInsertTime = SystemClock.uptimeMillis();
+        }
         if (mIsExpanded && mAnimationsEnabled && !mChangePositionInProgress && !isFullyHidden()) {
             // Generate Animations
             mChildrenToAddAnimated.add(child);
@@ -4055,6 +4065,17 @@ public class NotificationStackScrollLayout
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (isTapDuringInsert(ev)) {
+            MotionEvent cancel = MotionEvent.obtain(ev);
+            cancel.setAction(MotionEvent.ACTION_CANCEL);
+            boolean handled = dispatchTouchEvent(cancel);
+            cancel.recycle();
+            return handled;
+        }
+        if (LiquidGlass.isEnabled(mContext)) {
+            if (mGlassPress == null) mGlassPress = new NotificationGlassPress(this);
+            mGlassPress.onTouch(this, ev);
+        }
         if (NsslTouchDispatchFix.isEnabled()) {
             // IMPORTANT: Dispatch to super first to handle standard touch routing.
             // This triggers side effects on subsequent events (like ACTION_MOVE), potentially
@@ -6680,7 +6701,35 @@ public class NotificationStackScrollLayout
         }
     }
 
+    private boolean isTapDuringInsert(MotionEvent ev) {
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN -> {
+                mTouchDuringInsert = SystemClock.uptimeMillis() - mLastInsertTime
+                        < StackStateAnimator.ANIMATION_DURATION_APPEAR_DISAPPEAR + 100;
+                mInsertTouchX = ev.getX();
+                mInsertTouchY = ev.getY();
+            }
+            case MotionEvent.ACTION_UP -> {
+                boolean tap = mTouchDuringInsert && Math.hypot(ev.getX() - mInsertTouchX,
+                        ev.getY() - mInsertTouchY) < mTouchSlop;
+                mTouchDuringInsert = false;
+                return tap;
+            }
+            case MotionEvent.ACTION_CANCEL -> mTouchDuringInsert = false;
+            default -> { }
+        }
+        return false;
+    }
+
     private void updateBlurEffect() {
+        if (mBlurRadius > 0 && LiquidGlass.isEnabled(mContext)) {
+            final float max = getResources().getDimensionPixelSize(
+                    R.dimen.max_shade_content_blur_radius) * 0.6f;
+            mBlurFade = 1f - Math.min(1f, mBlurRadius / Math.max(max, 1f));
+            mBlurEffect = null;
+            return;
+        }
+        mBlurFade = 1f;
         if (mBlurRadius > 0) {
             mBlurEffect =
                     RenderEffect.createBlurEffect(mBlurRadius, mBlurRadius, Shader.TileMode.CLAMP);
@@ -6867,22 +6916,25 @@ public class NotificationStackScrollLayout
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
-        if (mBlurEffect != null) {
+        if (mBlurEffect != null || mBlurFade < 1f) {
             spewLog("Applying blur RenderEffect to NotificationStackScrollLayout");
-            // reuse the cached RenderNode to blur
-            mBlurNode.setPosition(0, 0, canvas.getWidth(), canvas.getHeight());
-            mBlurNode.setRenderEffect(mBlurEffect);
-            Canvas blurCanvas = mBlurNode.beginRecording();
-            // draw all the children (except HUNs) on the blurred canvas
-            super.dispatchDraw(blurCanvas);
-            mBlurNode.endRecording();
-            // apply clipping to the canvas
-            int saveCount = canvas.save();
-            applyClipToCanvas(canvas);
-            // draw the blurred content to the clipped canvas
-            canvas.drawRenderNode(mBlurNode);
-            // restore the canvas, so it doesn't clip anymore
-            canvas.restoreToCount(saveCount);
+            if (mBlurFade > 0f) {
+                // reuse the cached RenderNode to blur
+                mBlurNode.setPosition(0, 0, canvas.getWidth(), canvas.getHeight());
+                mBlurNode.setRenderEffect(mBlurEffect);
+                mBlurNode.setAlpha(mBlurFade);
+                Canvas blurCanvas = mBlurNode.beginRecording();
+                // draw all the children (except HUNs) on the blurred canvas
+                super.dispatchDraw(blurCanvas);
+                mBlurNode.endRecording();
+                // apply clipping to the canvas
+                int saveCount = canvas.save();
+                applyClipToCanvas(canvas);
+                // draw the blurred content to the clipped canvas
+                canvas.drawRenderNode(mBlurNode);
+                // restore the canvas, so it doesn't clip anymore
+                canvas.restoreToCount(saveCount);
+            }
             // draw the children that were left out during the dispatchDraw phase
             for (int i = 0; i < getChildCount(); i++) {
                 // TODO(b/388469101) draw these children in z-order
@@ -6901,10 +6953,24 @@ public class NotificationStackScrollLayout
         }
     }
 
+    private float mCosSwitchShift;
+
+    public void setCosSwitchTranslation(float translationX) {
+        mCosSwitchShift = translationX;
+        setTranslationX(translationX);
+        invalidate();
+    }
+
     private void applyClipToCanvas(Canvas canvas) {
         if (mShouldUseRoundedRectClipping) {
             // clip by the positive path if it is defined
-            canvas.clipPath(mRoundedClipPath);
+            if (mCosSwitchShift != 0f) {
+                canvas.translate(-mCosSwitchShift, 0f);
+                canvas.clipPath(mRoundedClipPath);
+                canvas.translate(mCosSwitchShift, 0f);
+            } else {
+                canvas.clipPath(mRoundedClipPath);
+            }
         }
         if (mShouldUseNegativeRoundedRectClipping) {
             // subtract the negative path if it is defined
@@ -6916,7 +6982,7 @@ public class NotificationStackScrollLayout
     protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
         boolean shouldUseClipping =
                 mShouldUseRoundedRectClipping || mShouldUseNegativeRoundedRectClipping;
-        if (mBlurEffect != null) {
+        if (mBlurEffect != null || mBlurFade < 1f) {
             if (shouldSkipBlurForChild(child)) {
                 // skip drawing this child during the regular dispatchDraw pass
                 return false;

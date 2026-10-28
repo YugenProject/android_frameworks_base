@@ -41,6 +41,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -104,6 +105,9 @@ import com.android.systemui.qs.shared.ui.QuickSettings
 import com.android.systemui.qs.shared.ui.QuickSettings.Elements.SplitShadeQuickSettings
 import com.android.systemui.qs.ui.composable.QuickSettingsContent
 import com.android.systemui.qs.ui.composable.QuickSettingsShade
+import com.android.systemui.penguin.LocalQsPanels
+import com.android.systemui.penguin.QsPanelsHost
+import com.android.systemui.penguin.QsPanelsHostScope
 import com.android.systemui.res.R
 import com.android.systemui.scene.session.ui.composable.SaveableSession
 import com.android.systemui.scene.shared.model.Scenes
@@ -115,6 +119,7 @@ import com.android.systemui.shade.ui.composable.ShadeScene.Companion.SplitShadeI
 import com.android.systemui.shade.ui.viewmodel.ShadeHeaderViewModel
 import com.android.systemui.shade.ui.viewmodel.ShadeSceneContentViewModel
 import com.android.systemui.shade.ui.viewmodel.ShadeUserActionsViewModel
+import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout
 import com.android.systemui.statusbar.notification.stack.ui.view.NotificationScrollView
 import com.android.systemui.statusbar.notification.stack.ui.viewmodel.NotificationsPlaceholderViewModel
 import dagger.Lazy
@@ -240,6 +245,14 @@ private fun ContentScope.ShadeScene(
                 }
             }
         }
+
+    val shadeMode = viewModel.shadeMode
+    LaunchedEffect(notificationStackScrollView, shadeMode) {
+        if (shadeMode !is ShadeMode.Dual) {
+            (notificationStackScrollView as? NotificationStackScrollLayout)
+                ?.setCosSwitchTranslation(0f)
+        }
+    }
 
     if (viewModel.shadeMode is ShadeMode.Split) {
         SplitShade(
@@ -367,70 +380,86 @@ private fun ContentScope.SingleShade(
                 )
             },
             mediaAndQqsHeader = {
-                val qqsLayoutPaddingBottom = 16.dp
-                val qsHorizontalMargin =
-                    shadeHorizontalPadding + dimensionResource(id = R.dimen.qs_horizontal_margin)
-                MediaAndQqsLayout(
-                    modifier =
-                        Modifier.element(QuickSettings.Elements.QuickQuickSettingsAndMedia)
-                            .offset {
-                                // Centering offset when the shade is being dragged down.
-                                val down = visualOffsetProvider().fastCoerceAtLeast(0)
-                                IntOffset(x = 0, y = down / 2)
-                            }
-                            .padding(bottom = qqsLayoutPaddingBottom)
-                            .padding(horizontal = qsHorizontalMargin),
-                    tiles =
-                        @Composable {
-                            // Because the ShadeScene is always composed, we need to manually tell
-                            // the tiles when they're actually visible and should be listening, just
-                            // like in the [QuickSettingsContent] Composable.
-                            var listening by remember { mutableStateOf(false) }
-                            LifecycleStartEffect(Unit) {
-                                listening = true
-
-                                onStopOrDispose { listening = false }
-                            }
-                            Box {
-                                val qqsViewModel =
-                                    rememberViewModel(traceName = "shade_scene_qqs") {
-                                        viewModel.quickQuickSettingsViewModel.create()
-                                    }
-                                if (viewModel.isQsEnabled) {
-                                    QuickQuickSettings(
-                                        qqsViewModel,
-                                        listening = { listening },
-                                        modifier = Modifier.sysuiResTag("quick_qs_panel"),
-                                    )
+                val penguin = viewModel.qsContainerViewModel.penguin
+                if (penguin != null) {
+                    CompositionLocalProvider(
+                        LocalQsPanels provides QsPanelsHost(penguin, viewModel.qsContainerViewModel)
+                    ) {
+                        with(penguin) {
+                            ShadeHeader(
+                                viewModel,
+                                mediaInRow,
+                                shadeHorizontalPadding,
+                                visualOffsetProvider,
+                            )
+                        }
+                    }
+                } else {
+                    val qqsLayoutPaddingBottom = 16.dp
+                    val qsHorizontalMargin =
+                        shadeHorizontalPadding + dimensionResource(id = R.dimen.qs_horizontal_margin)
+                    MediaAndQqsLayout(
+                        modifier =
+                            Modifier.element(QuickSettings.Elements.QuickQuickSettingsAndMedia)
+                                .offset {
+                                    // Centering offset when the shade is being dragged down.
+                                    val down = visualOffsetProvider().fastCoerceAtLeast(0)
+                                    IntOffset(x = 0, y = down / 2)
                                 }
+                                .padding(bottom = qqsLayoutPaddingBottom)
+                                .padding(horizontal = qsHorizontalMargin),
+                        tiles =
+                            @Composable {
+                                // Because the ShadeScene is always composed, we need to manually tell
+                                // the tiles when they're actually visible and should be listening, just
+                                // like in the [QuickSettingsContent] Composable.
+                                var listening by remember { mutableStateOf(false) }
+                                LifecycleStartEffect(Unit) {
+                                    listening = true
+
+                                    onStopOrDispose { listening = false }
+                                }
+                                Box {
+                                    val qqsViewModel =
+                                        rememberViewModel(traceName = "shade_scene_qqs") {
+                                            viewModel.quickQuickSettingsViewModel.create()
+                                        }
+                                    if (viewModel.isQsEnabled) {
+                                        QuickQuickSettings(
+                                            qqsViewModel,
+                                            listening = { listening },
+                                            modifier = Modifier.sysuiResTag("quick_qs_panel"),
+                                        )
+                                    }
+                                }
+                            },
+                        media = {
+                            if (isAlwaysComposedContentVisible()) {
+                                if (viewModel.isQsEnabled && viewModel.showMedia) {
+                                    Element(key = Media.Elements.MediaCarousel, modifier = Modifier) {
+                                        Media(
+                                            viewModelFactory = viewModel.mediaViewModelFactory,
+                                            presentationStyle =
+                                                if (mediaInRow) {
+                                                    MediaPresentationStyle.Compressed
+                                                } else {
+                                                    MediaPresentationStyle.Default
+                                                },
+                                            behavior = ShadeSceneContentViewModel.qqsMediaUiBehavior,
+                                            onDismissed = viewModel::onMediaSwipeToDismiss,
+                                            location = Media.Location.SHADE,
+                                        )
+                                    }
+                                }
+                            } else {
+                                // Add an empty box when QQS content is not visible to keep the same
+                                // number of elements.
+                                Box(modifier = Modifier)
                             }
                         },
-                    media = {
-                        if (isAlwaysComposedContentVisible()) {
-                            if (viewModel.isQsEnabled && viewModel.showMedia) {
-                                Element(key = Media.Elements.MediaCarousel, modifier = Modifier) {
-                                    Media(
-                                        viewModelFactory = viewModel.mediaViewModelFactory,
-                                        presentationStyle =
-                                            if (mediaInRow) {
-                                                MediaPresentationStyle.Compressed
-                                            } else {
-                                                MediaPresentationStyle.Default
-                                            },
-                                        behavior = ShadeSceneContentViewModel.qqsMediaUiBehavior,
-                                        onDismissed = viewModel::onMediaSwipeToDismiss,
-                                        location = Media.Location.SHADE,
-                                    )
-                                }
-                            }
-                        } else {
-                            // Add an empty box when QQS content is not visible to keep the same
-                            // number of elements.
-                            Box(modifier = Modifier)
-                        }
-                    },
-                    mediaInRow = mediaInRow,
-                )
+                        mediaInRow = mediaInRow,
+                    )
+                }
             },
             scrollableScrim = { onContentHeightChanged, isScrimAtRest ->
                 NestedScrollingNotificationPanel(
@@ -612,66 +641,75 @@ private fun ContentScope.SplitShade(
                             }
                         }
 
-                        NestedSceneTransitionLayout(
-                            state = sceneState,
-                            debugName = "SplitShade",
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            scene(QS) {
-                                val tileSquishiness by
-                                    with(this@SplitShade) {
-                                        animateContentFloatAsState(
-                                            value = 1f,
-                                            key = QuickSettings.SharedValues.TilesSquishiness,
-                                            canOverflow = false,
-                                        )
-                                    }
-
-                                LaunchedEffectWithLifecycle(Unit) {
-                                    snapshotFlow { tileSquishiness }
-                                        .collect { viewModel.setTileSquishiness(it) }
-                                }
-
-                                Element(QS.rootElementKey, Modifier) {
-                                    Column {
-                                        Box(
-                                            Modifier.weight(1f)
-                                                .sysuiResTag("expanded_qs_scroll_view")
-                                                .verticalScroll(rememberScrollState())
-                                                .wrapContentHeight(
-                                                    align = Alignment.Top,
-                                                    unbounded = true,
-                                                )
-                                        ) {
-                                            QuickSettingsContent(
-                                                qsContainerViewModel,
-                                                mediaInRow = false,
-                                                mediaSquishiness = { tileSquishiness },
+                        QsPanelsHostScope(qsContainerViewModel) {
+                            NestedSceneTransitionLayout(
+                                state = sceneState,
+                                debugName = "SplitShade",
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                scene(QS) {
+                                    val tileSquishiness by
+                                        with(this@SplitShade) {
+                                            animateContentFloatAsState(
+                                                value = 1f,
+                                                key = QuickSettings.SharedValues.TilesSquishiness,
+                                                canOverflow = false,
                                             )
                                         }
-                                        FooterActionsWithAnimatedVisibility(
-                                            viewModel = footerActionsViewModel,
-                                            isCustomizing = false,
-                                            customizingAnimationDuration = 0,
-                                            modifier =
-                                                Modifier.align(Alignment.CenterHorizontally)
-                                                    .sysuiResTag("qs_footer_actions"),
-                                        )
+
+                                    LaunchedEffectWithLifecycle(Unit) {
+                                        snapshotFlow { tileSquishiness }
+                                            .collect { viewModel.setTileSquishiness(it) }
+                                    }
+
+                                    Element(QS.rootElementKey, Modifier) {
+                                        Column {
+                                            Box(
+                                                Modifier.weight(1f)
+                                                    .sysuiResTag("expanded_qs_scroll_view")
+                                                    .verticalScroll(rememberScrollState())
+                                                    .wrapContentHeight(
+                                                        align = Alignment.Top,
+                                                        unbounded = true,
+                                                    )
+                                            ) {
+                                                QuickSettingsContent(
+                                                    qsContainerViewModel,
+                                                    mediaInRow = false,
+                                                    mediaSquishiness = { tileSquishiness },
+                                                )
+                                            }
+                                            FooterActionsWithAnimatedVisibility(
+                                                viewModel = footerActionsViewModel,
+                                                isCustomizing = false,
+                                                customizingAnimationDuration = 0,
+                                                extraAction = { qsContainerViewModel.penguin?.FooterAction(qsContainerViewModel) },
+                                                modifier =
+                                                    Modifier.align(Alignment.CenterHorizontally)
+                                                        .sysuiResTag("qs_footer_actions"),
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            scene(Edit) {
-                                Element(Edit.rootElementKey, Modifier) {
-                                    GridAnchor()
-                                    EditMode(
-                                        qsContainerViewModel.editModeViewModel,
-                                        Modifier.testTag("edit_mode_scene")
-                                            .padding(
-                                                horizontal =
-                                                    QuickSettingsShade.Dimensions.HorizontalPadding
-                                            ),
-                                    )
+                                scene(Edit) {
+                                    Element(Edit.rootElementKey, Modifier) {
+                                        GridAnchor()
+                                        val penguinEditor =
+                                            qsContainerViewModel.penguin?.run {
+                                                OverlayEditor(qsContainerViewModel, Modifier)
+                                            } == true
+                                        if (!penguinEditor) {
+                                            EditMode(
+                                                qsContainerViewModel.editModeViewModel,
+                                                Modifier.testTag("edit_mode_scene")
+                                                    .padding(
+                                                        horizontal =
+                                                            QuickSettingsShade.Dimensions.HorizontalPadding
+                                                    ),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -68,6 +68,7 @@ import androidx.compose.foundation.layout.requiredHeightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -177,6 +178,7 @@ import com.android.systemui.qs.panels.ui.compose.dragAndDropTileSource
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.InactiveTileCornerRadius
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileArrangementPadding
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileHeight
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.tileHeight
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.ToggleTargetSize
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.EditModeTileDefaults.AUTO_SCROLL_DISTANCE
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.EditModeTileDefaults.AUTO_SCROLL_SPEED
@@ -187,6 +189,7 @@ import com.android.systemui.qs.panels.ui.compose.infinitegrid.EditModeTileDefaul
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.EditModeTileDefaults.GridBackgroundCornerRadius
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.EditModeTileDefaults.TilePlacementSpec
 import com.android.systemui.qs.panels.ui.compose.selection.InteractiveTileContainer
+import com.android.systemui.penguin.LocalQsPanels
 import com.android.systemui.qs.panels.ui.compose.selection.MutableSelectionState
 import com.android.systemui.qs.panels.ui.compose.selection.QSDragAnchorsData
 import com.android.systemui.qs.panels.ui.compose.selection.ResizingState
@@ -405,11 +408,16 @@ private fun EditModeScrollableColumn(
                     }
                 },
     ) {
+        LocalQsPanels.current?.panels?.editMode?.let { edit ->
+            Box(Modifier.fillMaxWidth()) { edit.HeaderPreview() }
+        }
+
         content()
 
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.systemBars))
     }
 }
+
 
 @Composable
 private fun NavBarInsetScrollZone(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -605,9 +613,31 @@ private fun CurrentTilesGrid(
 ) {
     val currentListState by rememberUpdatedState(listState)
     val totalRows = listState.tiles.lastOrNull()?.row ?: 0
+    val edit = LocalQsPanels.current?.panels?.editMode
+    val elementSpecs = edit?.elementSpecs ?: emptySet()
+    val panelHeights = elementSpecs.associateWith { edit?.previewHeight(it) }
+    val defaultPanelHeight = tileHeight() * 2 + TileArrangementPadding
+    val panelRowsExtra =
+        listState.tiles
+            .filterIsInstance<TileGridCell>()
+            .filter { it.tile.tileSpec in elementSpecs && it.rows <= 1 }
+            .groupBy { it.row }
+            .values
+            .fold(0.dp) { acc, cells ->
+                val tallest =
+                    cells.maxOf {
+                        (panelHeights[it.tile.tileSpec] ?: defaultPanelHeight).value
+                    }
+                acc + (tallest.dp - tileHeight()).coerceAtLeast(0.dp)
+            }
     val totalHeight by
         animateDpAsState(
-            gridHeight(totalRows + 1, TileHeight, TileArrangementPadding, CurrentTilesGridPadding),
+            gridHeight(
+                totalRows + 1,
+                tileHeight(),
+                TileArrangementPadding,
+                CurrentTilesGridPadding,
+            ) + panelRowsExtra,
             label = "QSEditCurrentTilesGridHeight",
         )
     val gridState = rememberLazyGridState()
@@ -658,7 +688,9 @@ private fun CurrentTilesGrid(
                     with(resizingOperation) {
                         // Commit the new size of the tile IF the size changed. Do this check before
                         // a snapshot is taken to avoid saving an unnecessary snapshot
-                        val isIcon = spec !in listState.largeTilesSpecs
+                        val isIcon =
+                            if (spec in elementSpecs) spec !in listState.fullWidthSpecs
+                            else spec !in listState.largeTilesSpecs
                         if (isIcon != toIcon) {
                             onEditAction(EditAction.ResizeTile(spec, toIcon))
                         }
@@ -833,6 +865,24 @@ private fun gridHeight(rows: Int, tileHeight: Dp, tilePadding: Dp, gridPadding: 
     return ((tileHeight + tilePadding) * rows) + gridPadding * 2
 }
 
+@Composable
+private fun cellHeightOf(cell: TileGridCell): Dp {
+    val rowHeight = tileHeight()
+    val edit = LocalQsPanels.current?.panels?.editMode
+    return if (edit == null || cell.tile.tileSpec !in edit.elementSpecs) {
+        rowHeight
+    } else if (cell.rows > 1) {
+        rowHeight * cell.rows + TileArrangementPadding * (cell.rows - 1)
+    } else {
+        edit.previewHeight(cell.tile.tileSpec) ?: (rowHeight * 2 + TileArrangementPadding)
+    }
+}
+
+private fun Modifier.occupyRow(height: Dp) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, height.roundToPx()) { placeable.place(0, 0) }
+}
+
 private fun GridCell.key(index: Int): Any {
     return if (this is TileGridCell) key else index
 }
@@ -865,14 +915,19 @@ fun LazyGridScope.EditTiles(
             is TileGridCell ->
                 if (listState.isMoving(cell.tile.tileSpec)) {
                     // If the tile is being moved, replace it with a visible spacer
-                    SpacerGridCell(
-                        Modifier.background(
-                            color =
-                                MaterialTheme.colorScheme.secondary.copy(
-                                    alpha = EditModeTileDefaults.PLACEHOLDER_ALPHA
-                                ),
-                            shape = RoundedCornerShape(InactiveTileCornerRadius),
-                        )
+                    Box(
+                        Modifier.then(
+                                if (cell.rows > 1) Modifier.occupyRow(tileHeight()) else Modifier
+                            )
+                            .height(cellHeightOf(cell))
+                            .fillMaxWidth()
+                            .background(
+                                color =
+                                    MaterialTheme.colorScheme.secondary.copy(
+                                        alpha = EditModeTileDefaults.PLACEHOLDER_ALPHA
+                                    ),
+                                shape = RoundedCornerShape(InactiveTileCornerRadius),
+                            )
                     )
                 } else {
                     TileGridCell(
@@ -927,7 +982,11 @@ private fun LazyGridItemScope.TileGridCell(
 ) {
     val stateDescription = stringResource(id = R.string.accessibility_qs_edit_position, index + 1)
     val tileState by rememberTileState(cell.tile, selectionState)
-    val resizingState = rememberResizingState(cell.tile.tileSpec, cell.isIcon)
+    val isPanelElement =
+        LocalQsPanels.current?.panels?.editMode?.elementSpecs?.contains(cell.tile.tileSpec) == true
+    val smallSpan = if (isPanelElement) largeTilesSpan else 1
+    val isSmall = cell.width <= smallSpan
+    val resizingState = rememberResizingState(cell.tile.tileSpec, isSmall)
 
     if (tileState == TileState.Selected) {
         // If the tile is selected, listen to new target values from the draggable anchor to toggle
@@ -965,7 +1024,7 @@ private fun LazyGridItemScope.TileGridCell(
             .map { layoutInfo ->
                 layoutInfo.visibleItemsInfo
                     .find { it.key == cell.key }
-                    ?.let { QSDragAnchorsData(it.span == 1, it.size.width) }
+                    ?.let { QSDragAnchorsData(it.span <= smallSpan, it.size.width) }
             }
             .filterNotNull()
             .distinctUntilChanged()
@@ -996,14 +1055,17 @@ private fun LazyGridItemScope.TileGridCell(
         selectionState.unSelect()
         onRemoveTile(cell.tile.tileSpec)
     }
+    val rowHeight = tileHeight()
+    val cellHeight = cellHeightOf(cell)
     InteractiveTileContainer(
         tileState = tileState,
         resizingState = resizingState,
         modifier =
             modifier
-                .height(TileHeight)
-                .fillMaxWidth()
                 .animateItem(placementSpec = placementSpec)
+                .then(if (cell.rows > 1) Modifier.occupyRow(rowHeight) else Modifier)
+                .height(cellHeight)
+                .fillMaxWidth()
                 .tileTestTag(cell.isIcon),
         onClick = {
             if (tileState == TileState.Removable) {
@@ -1013,6 +1075,7 @@ private fun LazyGridItemScope.TileGridCell(
             }
         },
         contentDescription = decorationClickLabel,
+        iconOnly = cell.isIcon,
     ) {
         // Rapidly composing elements with the draggable modifier can cause visual jank. This
         // usually happens when resizing a tile multiple times. We can fix this by applying the
@@ -1060,7 +1123,7 @@ private fun LazyGridItemScope.TileGridCell(
                             // Don't allow for resizing during placement mode
                             actions.add(
                                 CustomAccessibilityAction(toggleSizeLabel) {
-                                    onResize(FinalResizeOperation(cell.tile.tileSpec, !cell.isIcon))
+                                    onResize(FinalResizeOperation(cell.tile.tileSpec, !isSmall))
                                     true
                                 }
                             )
@@ -1081,12 +1144,12 @@ private fun LazyGridItemScope.TileGridCell(
                 )
                 .thenIf(isSelectable) { draggableModifier }
                 .tileBackground(
-                    cornerRadius = InactiveTileCornerRadius,
-                    alpha = { containerAlpha },
+                    cornerRadius = if (isPanelElement) 0.dp else InactiveTileCornerRadius,
+                    alpha = { if (isPanelElement) 0f else containerAlpha },
                     color = { colors.background },
                 )
                 .keyboardShortcuts(cell.tile.tileSpec, selectionState) {
-                    onResize(FinalResizeOperation(cell.tile.tileSpec, !cell.isIcon))
+                    onResize(FinalResizeOperation(cell.tile.tileSpec, !isSmall))
                 }
                 .thenIf(isSelectable) { selectableModifier }
         ) {
@@ -1161,7 +1224,7 @@ private fun AvailableTileGridCell(
                 }
                 .sysuiResTag(AVAILABLE_TILE_TEST_TAG),
     ) {
-        Box(Modifier.fillMaxWidth().height(TileHeight)) {
+        Box(Modifier.fillMaxWidth().height(tileHeight())) {
             val draggableModifier =
                 if (cell.isCurrent || !canLayoutTile) {
                     Modifier
@@ -1268,7 +1331,7 @@ private fun BoxScope.AppIconText(
 @Composable
 private fun SpacerGridCell(modifier: Modifier = Modifier) {
     // By default, spacers are invisible and exist purely to catch drag movements
-    Box(modifier.height(TileHeight).fillMaxWidth())
+    Box(modifier.height(tileHeight()).fillMaxWidth())
 }
 
 @Composable
@@ -1278,9 +1341,15 @@ fun EditTile(
     progress: () -> Float,
     colors: TileColors = EditModeTileDefaults.editTileColors(),
 ) {
+    val preview = LocalQsPanels.current?.panels?.editMode?.preview(tile.tileSpec)
+    if (preview != null) {
+        Box(Modifier.fillMaxSize()) { preview() }
+        return
+    }
     val defaultStartPadding = CommonTileDefaults.StartPadding
     val iconSizeDiff = CommonTileDefaults.SmallTileIconSize - CommonTileDefaults.LargeTileIconSize
-    val toggleTargetSize = ToggleTargetSize
+    val toggleInset = LocalQsPanels.current?.panels?.tileStyle()?.editToggleInset ?: 0.dp
+    val toggleTargetSize = ToggleTargetSize + toggleInset
     Row(
         horizontalArrangement = spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1327,17 +1396,21 @@ fun EditTile(
     ) {
         // Icon
         Box(
-            Modifier.size(ToggleTargetSize).thenIf(tile.isDualTarget) {
-                Modifier.drawBehind { drawCircle(colors.iconBackground, alpha = progress()) }
-            }
+            Modifier.thenIf(toggleInset > 0.dp) { Modifier.padding(toggleInset / 2) }
+                .thenIf(tile.isDualTarget) {
+                    Modifier.drawBehind { drawCircle(colors.iconBackground, alpha = progress()) }
+                },
+            contentAlignment = Alignment.Center,
         ) {
-            SmallTileContent(
-                iconProvider = { tile.icon },
-                color = colors.icon,
-                animateToEnd = true,
-                size = { CommonTileDefaults.SmallTileIconSize - iconSizeDiff * progress() },
-                modifier = Modifier.align(Alignment.Center),
-            )
+            Box(Modifier.size(ToggleTargetSize)) {
+                SmallTileContent(
+                    iconProvider = { tile.icon },
+                    color = colors.icon,
+                    animateToEnd = true,
+                    size = { CommonTileDefaults.SmallTileIconSize - iconSizeDiff * progress() },
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
         }
 
         // Labels, positioned after the icon

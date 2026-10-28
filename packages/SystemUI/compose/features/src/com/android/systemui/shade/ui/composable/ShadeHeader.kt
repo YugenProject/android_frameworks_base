@@ -158,6 +158,7 @@ object ShadeHeader {
         val ExpandedHeight = 120.dp
         val ChipPaddingHorizontal = 6.dp
         val ChipPaddingVertical = 4.dp
+        val StatusIconsEndSpacing = 6.dp
     }
 
     object Colors {
@@ -473,6 +474,23 @@ fun ContentScope.OverlayShadeHeader(
     )
 }
 
+@Composable
+fun ContentScope.ShadeStatusRow(viewModel: ShadeHeaderViewModel, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        ShadeCarrierGroup(viewModel = viewModel)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            StatusIcons(
+                viewModel = viewModel,
+                useExpandedFormat = false,
+                modifier = Modifier.padding(end = ShadeHeader.Dimensions.StatusIconsEndSpacing),
+                foregroundColor = ShadeHeader.Colors.textColor.toArgb(),
+                backgroundColor = Color.Transparent.toArgb(),
+            )
+        }
+        BatteryInfo(viewModel = viewModel, showIcon = true, useExpandedFormat = false)
+    }
+}
+
 /** The header that appears at the top of the Quick Settings shade overlay. */
 @Composable
 fun QuickSettingsOverlayHeader(viewModel: ShadeHeaderViewModel, modifier: Modifier = Modifier) {
@@ -661,6 +679,7 @@ private fun ContentScope.Clock(
         }
     }
 }
+
 
 @Composable
 private fun BatteryInfo(

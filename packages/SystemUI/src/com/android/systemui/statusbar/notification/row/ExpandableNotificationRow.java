@@ -91,6 +91,9 @@ import com.android.internal.widget.CallLayout;
 import com.android.internal.widget.ConversationLayout;
 import com.android.internal.widget.MessagingLayout;
 import com.android.systemui.Flags;
+import com.android.systemui.penguin.CosFeature;
+import com.android.systemui.penguin.CosFeatures;
+import com.android.systemui.qs.shared.style.LiquidGlass;
 import com.android.systemui.plugins.FalsingManager;
 import com.android.systemui.plugins.PluginListener;
 import com.android.systemui.plugins.statusbar.NotificationMenuRowPlugin;
@@ -947,6 +950,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
         int intrinsicBefore = getIntrinsicHeight();
         mIsHeadsUp = isHeadsUp;
         mPrivateLayout.setHeadsUp(isHeadsUp);
+        updateHeadsUpGlass();
         if (mIsSummaryWithChildren) {
             // The overflow might change since we allow more lines as HUN.
             mChildrenContainer.updateGroupOverflow();
@@ -1295,6 +1299,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
         int intrinsicHeight = getIntrinsicHeight();
         boolean wasAboveShelf = isAboveShelf();
         mPinnedStatus = pinnedStatus;
+        updateHeadsUpGlass();
         if (intrinsicHeight != getIntrinsicHeight()) {
             notifyHeightChanged(/* needsAnimation= */ false, "ENR.setPinnedStatus");
         }
@@ -1325,6 +1330,18 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
     @Override
     public boolean isPinned() {
         return mPinnedStatus.isPinned();
+    }
+
+    private void updateHeadsUpGlass() {
+        if (mBackgroundNormal != null) {
+            mBackgroundNormal.setHeadsUpGlass(mIsHeadsUp && isPinned());
+            mBackgroundNormal.setBlurBackgroundEnabled(usesBlurredBackground());
+        }
+    }
+
+    @Override
+    protected boolean blursAsHeadsUp() {
+        return mIsHeadsUp && isPinned() && CosFeatures.isOn(mContext, CosFeature.Shade);
     }
 
     @Override
@@ -4007,7 +4024,8 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
             mShowNoBackground = true;
             mChildrenContainer.updateHeaderForExpansion(mShowNoBackground);
         } else if (mIsSummaryWithChildren) {
-            mShowNoBackground = !mShowGroupBackgroundWhenExpanded && isGroupExpanded()
+            mShowNoBackground = !LiquidGlass.isEnabled(mContext)
+                    && !mShowGroupBackgroundWhenExpanded && isGroupExpanded()
                     && !isGroupExpansionChanging() && !isUserSwipingToExpandRow();
             mChildrenContainer.updateHeaderForExpansion(mShowNoBackground);
             List<ExpandableNotificationRow> children = mChildrenContainer.getAttachedChildren();

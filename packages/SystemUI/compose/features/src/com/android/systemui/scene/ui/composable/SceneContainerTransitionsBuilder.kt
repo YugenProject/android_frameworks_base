@@ -18,6 +18,7 @@ package com.android.systemui.scene.ui.composable
 
 import android.content.res.Resources
 import com.android.compose.animation.scene.SceneTransitions
+import com.android.systemui.penguin.ShadeMotion
 import com.android.compose.animation.scene.reveal.ContainerRevealHaptics
 import com.android.compose.animation.scene.transitions
 import com.android.mechanics.behavior.VerticalExpandContainerSpec
@@ -30,6 +31,9 @@ import com.android.systemui.scene.ui.viewmodel.ToBouncerTransitionViewModel
  */
 interface SceneContainerTransitionsBuilder {
 
+    val shadeMotion: ShadeMotion?
+        get() = null
+
     /** Build the [SceneContainer] transitions spec. */
     fun build(
         shadeExpansionMotion: VerticalExpandContainerSpec,
@@ -37,6 +41,7 @@ interface SceneContainerTransitionsBuilder {
         animateQsTilesViewModel: AnimateQsTilesViewModel,
         toBouncerTransitionViewModel: ToBouncerTransitionViewModel,
         resources: Resources,
+        liquidGlass: Boolean = false,
     ): SceneTransitions
 }
 
@@ -53,5 +58,6 @@ class ConstantSceneContainerTransitionsBuilder(
         animateQsTilesViewModel: AnimateQsTilesViewModel,
         toBouncerTransitionViewModel: ToBouncerTransitionViewModel,
         resources: Resources,
+        liquidGlass: Boolean,
     ): SceneTransitions = transitions
 }

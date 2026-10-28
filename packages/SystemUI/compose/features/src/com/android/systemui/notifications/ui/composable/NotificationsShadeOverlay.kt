@@ -16,6 +16,10 @@
 
 package com.android.systemui.notifications.ui.composable
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -24,14 +28,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
@@ -54,6 +64,8 @@ import com.android.systemui.notifications.intelligence.rules.shared.NmContextual
 import com.android.systemui.notifications.intelligence.rules.ui.viewmodel.NotificationRulesParentViewModel
 import com.android.systemui.notifications.ui.viewmodel.NotificationsShadeOverlayActionsViewModel
 import com.android.systemui.notifications.ui.viewmodel.NotificationsShadeOverlayContentViewModel
+import com.android.systemui.penguin.CosFeature
+import com.android.systemui.penguin.rememberCosFeature
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys
 import com.android.systemui.res.R
 import com.android.systemui.scene.session.ui.composable.SaveableSession
@@ -61,8 +73,10 @@ import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.ui.composable.LocalSceneContainerPreloadedResources
 import com.android.systemui.scene.ui.composable.Overlay
 import com.android.systemui.shade.ui.composable.ChipHighlightModel
+import com.android.systemui.shade.ui.composable.LocalCosSwitchMotion
 import com.android.systemui.shade.ui.composable.OverlayShade
 import com.android.systemui.shade.ui.composable.OverlayShadeHeader
+import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout
 import com.android.systemui.statusbar.notification.stack.ui.view.NotificationScrollView
 import dagger.Lazy
 import javax.inject.Inject
@@ -136,6 +150,7 @@ constructor(
             alignmentOnWideScreens = viewModel.alignmentOnWideScreens,
             statusBarHeightPx = viewModel.statusBarHeightPx,
             enableTransparency = viewModel.isTransparencyEnabled,
+            cosPanel = rememberCosFeature(CosFeature.Shade),
             modifier = modifier.blur(with(LocalDensity.current) { animatedBlurRadiusPx.toDp() }),
             onScrimClicked = viewModel::onScrimClicked,
             onBackgroundPlaced = { bounds, _, _ -> viewModel.onShadeOverlayBoundsChanged(bounds) },
@@ -190,6 +205,16 @@ constructor(
                 }
 
                 val stackScrollView = stackScrollView.get()
+                val switchMotion = LocalCosSwitchMotion.current
+                if (switchMotion != null) {
+                    LaunchedEffect(switchMotion, stackScrollView) {
+                        snapshotFlow { if (switchMotion.active) switchMotion.offset else 0f }
+                            .collect { stackScrollView.moveWithCosSwitch(it) }
+                    }
+                    DisposableEffect(stackScrollView) {
+                        onDispose { stackScrollView.moveWithCosSwitch(0f) }
+                    }
+                }
                 ScrollingNotificationPanel(
                     tag = "NotifShadeOverlay",
                     shadeSession = shadeSession,
@@ -235,4 +260,27 @@ object NotificationsShade {
         val Panel = ElementKey("NotificationsShadeOverlayPanel")
         val StatusBar = ElementKey("NotificationsShadeOverlayStatusBar")
     }
+}
+
+@Composable
+private fun secureIntSetting(key: String, default: Int): Int {
+    val resolver = LocalContext.current.contentResolver
+    var value by remember(key) { mutableStateOf(Settings.Secure.getInt(resolver, key, default)) }
+    DisposableEffect(resolver, key) {
+        val observer =
+            object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    value = Settings.Secure.getInt(resolver, key, default)
+                }
+            }
+        resolver.registerContentObserver(Settings.Secure.getUriFor(key), false, observer)
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+    return value
+}
+
+private fun NotificationScrollView.moveWithCosSwitch(x: Float) {
+    val view = asView()
+    if (view is NotificationStackScrollLayout) view.setCosSwitchTranslation(x)
+    else view.translationX = x
 }

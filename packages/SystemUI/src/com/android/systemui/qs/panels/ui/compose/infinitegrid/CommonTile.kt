@@ -23,26 +23,32 @@ import android.graphics.drawable.Drawable
 import android.text.TextUtils
 import androidx.annotation.VisibleForTesting
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +83,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -104,6 +111,7 @@ import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileLabelBlurWidth
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelSettings
 import com.android.systemui.qs.panels.ui.viewmodel.AccessibilityUiState
+import com.android.systemui.penguin.LocalQsPanels
 import com.android.systemui.qs.ui.compose.borderOnFocus
 import com.android.systemui.res.R
 import kotlin.math.abs
@@ -139,43 +147,65 @@ fun LargeTileContent(
     ) {
         // Icon
         val longPressLabel = longPressLabelSettings().takeIf { onLongClick != null }
-        val animatedBackgroundColor by
-            animateColorAsState(colors.iconBackground, label = "QSTileDualTargetBackgroundColor")
         val focusBorderColor = MaterialTheme.colorScheme.secondary
+        val stockStyle = LocalQsPanels.current?.panels?.tileStyle()?.iconHalo != true
+        val animatedIconBackgroundColor by
+            animateColorAsState(
+                colors.iconBackground,
+                tileColorSpec(),
+                label = "QSTileDualTargetBackgroundColor",
+            )
         Box(
             modifier =
-                Modifier.size(CommonTileDefaults.ToggleTargetSize).thenIf(isDualTarget) {
-                    Modifier.borderOnFocus(color = focusBorderColor, iconShape.topEnd)
-                        .clip(iconShape)
-                        .drawBehind { drawRect(animatedBackgroundColor) }
-                        // apply the squish effect after the bg is drawn
-                        .verticalSquish(squishiness)
-                        .combinedClickable(
-                            onClick = toggleClick!!,
-                            onLongClick = onLongClick,
-                            onLongClickLabel = longPressLabel,
-                            hapticFeedbackEnabled = false, // Haptics handled separately
-                        )
-                        .thenIf(accessibilityUiState != null) {
-                            Modifier.semantics {
-                                    accessibilityUiState as AccessibilityUiState
-                                    contentDescription = accessibilityUiState.contentDescription
-                                    stateDescription = accessibilityUiState.stateDescription
-                                    accessibilityUiState.toggleableState?.let {
-                                        toggleableState = it
-                                    }
-                                    role = Role.Switch
-                                }
-                                .sysuiResTag(TEST_TAG_TOGGLE)
-                        }
-                }
+                Modifier.thenIf(!stockStyle) {
+                    Modifier.padding(8.dp).drawBehind {
+                        drawCircle(colors.circleAroundIcon)
+                    }
+                },
+            contentAlignment = Alignment.Center,
         ) {
-            SmallTileContent(
-                iconProvider = iconProvider,
-                color = colors.icon,
-                size = { CommonTileDefaults.LargeTileIconSize },
-                modifier = Modifier.align(Alignment.Center),
-            )
+            Box(
+                modifier =
+                    Modifier.size(CommonTileDefaults.ToggleTargetSize)
+                        .clip(iconShape)
+                        .thenIf(stockStyle && isDualTarget) {
+                            Modifier.drawBehind { drawRect(animatedIconBackgroundColor) }
+                        }
+                        .verticalSquish(squishiness)
+                        .thenIf(isDualTarget) {
+                            Modifier.borderOnFocus(color = focusBorderColor, iconShape.topEnd)
+                                .combinedClickable(
+                                    onClick = toggleClick!!,
+                                    onLongClick = onLongClick,
+                                    onLongClickLabel = longPressLabel,
+                                    hapticFeedbackEnabled = false, // Haptics handled separately
+                                )
+                                .thenIf(accessibilityUiState != null) {
+                                    Modifier.semantics {
+                                            accessibilityUiState as AccessibilityUiState
+                                            contentDescription =
+                                                accessibilityUiState.contentDescription
+                                            stateDescription = accessibilityUiState.stateDescription
+                                            accessibilityUiState.toggleableState?.let {
+                                                toggleableState = it
+                                            }
+                                            role = Role.Switch
+                                        }
+                                        .sysuiResTag(TEST_TAG_TOGGLE)
+                                }
+                        }
+            ) {
+                SmallTileContent(
+                    iconProvider = iconProvider,
+                    color = colors.icon,
+                    size = { CommonTileDefaults.LargeTileIconSize },
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
+        }
+
+        if (!stockStyle) {
+            Spacer(modifier = Modifier.width(0.5.dp).height(CommonTileDefaults.TileDividerHeight))
         }
 
         // Labels
@@ -208,9 +238,14 @@ fun LargeTileLabels(
     isVisible: () -> Boolean = { true },
     accessibilityUiState: AccessibilityUiState? = null,
 ) {
-    val animatedLabelColor by animateColorAsState(colors.label, label = "QSTileLabelColor")
+    val animatedLabelColor by
+        animateColorAsState(colors.label, tileColorSpec(), label = "QSTileLabelColor")
     val animatedSecondaryLabelColor by
-        animateColorAsState(colors.secondaryLabel, label = "QSTileSecondaryLabelColor")
+        animateColorAsState(
+            colors.secondaryLabel,
+            tileColorSpec(),
+            label = "QSTileSecondaryLabelColor",
+        )
     Column(verticalArrangement = Arrangement.Center, modifier = modifier.fillMaxHeight()) {
         TileLabel(
             text = label,
@@ -246,7 +281,7 @@ fun SmallTileContent(
 ) {
     val context = LocalContext.current
     val icon = iconProvider(context)
-    val animatedColor by animateColorAsState(color, label = "QSTileIconColor")
+    val animatedColor by animateColorAsState(color, tileColorSpec(), label = "QSTileIconColor")
     val sizeValue = size()
     val iconModifier =
         modifier
@@ -376,7 +411,9 @@ fun Modifier.tileTestTag(iconOnly: Boolean): Modifier {
 @Composable
 fun Modifier.largeTilePadding(isDualTarget: Boolean = false): Modifier {
     return padding(
-        start = CommonTileDefaults.StartPadding,
+        start =
+            LocalQsPanels.current?.panels?.tileStyle()?.startPadding()
+                ?: CommonTileDefaults.StartPadding,
         end = if (isDualTarget) CommonTileDefaults.DualTargetEndPadding else TileEndPadding,
     )
 }
@@ -408,6 +445,8 @@ fun Modifier.bounceScale(
 object TileBounceMotionTestKeys {
     val BounceScale = MotionTestValueKey<Float>("bounceScale")
 }
+
+val LocalQsTileHeight = staticCompositionLocalOf<Dp?> { null }
 
 object CommonTileDefaults {
     val ActiveIconCornerRadius: Dp
@@ -477,7 +516,7 @@ object CommonTileDefaults {
     val TileHeight: Dp
         @Composable
         @ReadOnlyComposable
-        get() = dimensionResource(id = R.dimen.common_tile_default_tile_height)
+        get() = LocalQsTileHeight.current ?: dimensionResource(id = R.dimen.common_tile_default_tile_height)
 
     val ToggleTargetSize: Dp
         @Composable
@@ -489,7 +528,13 @@ object CommonTileDefaults {
     val ChevronSize = 14.dp
     val TileEndPadding = 12.dp
     val TileArrangementPadding = 6.dp
+    val IconSize = 26.dp
+    val TileStartPadding = 23.dp
     val TileLabelBlurWidth = 32.dp
+    val TileDividerHeight = 16.dp
+    val TilePaddingLarge = 10.dp
+    val InactiveCornerRadius = 50.dp
+    val ActiveCornerRadius = 100.dp
     const val TILE_MARQUEE_ITERATIONS = 1
     const val TILE_INITIAL_DELAY_MILLIS = 2000
 
@@ -499,6 +544,11 @@ object CommonTileDefaults {
     @Composable
     fun longPressLabelMoreDetails() =
         stringResource(id = R.string.accessibility_long_click_tile_details)
+
+    @Composable fun tileHeight() = dimensionResource(id = R.dimen.custom_qs_tile_height)
+
+    @Composable
+    fun longPressLabel() = stringResource(id = R.string.accessibility_long_click_tile)
 
     private val largeIconSize: Dp
         @Composable
@@ -548,3 +598,7 @@ private fun NonClippedImage(
         layout(constraints.minWidth, constraints.minHeight) {}
     }
 }
+
+@Composable
+internal fun tileColorSpec(): AnimationSpec<Color> =
+    LocalQsPanels.current?.panels?.tileStyle()?.colorSpec() ?: spring()

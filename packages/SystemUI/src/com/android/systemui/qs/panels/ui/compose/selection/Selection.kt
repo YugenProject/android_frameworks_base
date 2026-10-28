@@ -120,6 +120,7 @@ fun InteractiveTileContainer(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
     contentDescription: String? = null,
+    iconOnly: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val transition: Transition<Decoration> = updateTransition(tileState.decoration())
@@ -217,6 +218,7 @@ private fun Modifier.selectionBorder(
     selectionColor: Color,
     selectionBorderWidth: Dp,
     cornerRadius: Dp,
+    iconOnly: Boolean = false,
     selectionAlpha: () -> Float = { 0f },
 ): Modifier {
     return drawWithContent {

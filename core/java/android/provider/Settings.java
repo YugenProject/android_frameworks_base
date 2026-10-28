@@ -4415,6 +4415,26 @@ public final class Settings {
         // NOTE: If you add new settings here, be sure to add them to
         // com.android.providers.settings.SettingsProtoDumpUtil#dumpProtoSystemSettingsLocked.
 
+        /**
+         * @hide
+         */
+        public static final String LS_MEDIA_EXPAND = "ls_media_expand";
+
+        /**
+         * @hide
+         */
+        public static final String LS_MEDIA_EXPANDED = "ls_media_expanded";
+
+        /**
+         * @hide
+         */
+        public static final String LS_MEDIA_MOTION_ART = "ls_media_motion_art";
+
+        /**
+         * @hide
+         */
+        public static final String MEDIA_WAVEFORM_SEEKBAR = "media_waveform_seekbar";
+
         private static final float DEFAULT_FONT_SCALE = 1.0f;
         private static final int DEFAULT_FONT_WEIGHT = 0;
 
@@ -11797,6 +11817,13 @@ public final class Settings {
          */
         @android.provider.Settings.Readable
         public static final String DUAL_SHADE = "dual_shade";
+
+        /**
+         * Whether the dual shade is used in landscape.
+         * @hide
+         */
+        @android.provider.Settings.Readable
+        public static final String DUAL_SHADE_LANDSCAPE = "dual_shade_landscape";
 
        /**
          * 1 if it is allowed to remove the primary GAIA account. 0 by default.

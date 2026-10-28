@@ -33,6 +33,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -70,12 +71,34 @@ constructor(
      * Shade. If no preference was set explicitly, this emits the same values as
      * [isDualShadeEnabledByDefault].
      */
+        private val isLandscape: Flow<Boolean> =
+        configurationRepository.configurationValues
+            .map { it.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE }
+            .distinctUntilChanged()
+
     val isDualShadeSettingEnabled: Flow<Boolean> =
         if (SceneContainerFlag.isEnabled) {
             isDualShadeEnabledByDefault.flatMapLatest { defaultValue ->
-                secureSettingsRepository
-                    .boolSetting(Settings.Secure.DUAL_SHADE, defaultValue = defaultValue)
-                    .flowOn(backgroundDispatcher)
+                isLandscape.flatMapLatest { landscape ->
+                    val settingKey = if (landscape) {
+                        Settings.Secure.DUAL_SHADE_LANDSCAPE
+                    } else {
+                        Settings.Secure.DUAL_SHADE
+                    }
+                    combine(
+                            secureSettingsRepository.boolSetting(
+                                settingKey,
+                                defaultValue = defaultValue,
+                            ),
+                            secureSettingsRepository.boolSetting(
+                                ONE_UI_QS_SETTING,
+                                defaultValue = false,
+                            ),
+                        ) { chosen, oneUi ->
+                            chosen || oneUi
+                        }
+                        .flowOn(backgroundDispatcher)
+                }
             }
         } else {
             flowOf(false)
@@ -139,3 +162,5 @@ constructor(
         }
     }
 }
+
+private const val ONE_UI_QS_SETTING = "qs_oneui_experimental"

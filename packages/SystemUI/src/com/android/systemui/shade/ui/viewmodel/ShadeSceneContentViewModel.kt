@@ -39,7 +39,9 @@ import com.android.systemui.qs.ui.viewmodel.QuickSettingsContainerViewModel
 import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.SceneFamilies
+import com.android.systemui.media.remedia.domain.interactor.MediaInteractor
 import com.android.systemui.scene.shared.model.Scenes
+import com.android.systemui.shade.domain.interactor.ShadeInteractor
 import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
 import com.android.systemui.shade.domain.interactor.ShadeStatusBarComponentsInteractor
 import com.android.systemui.shade.shared.model.ShadeMode
@@ -68,6 +70,7 @@ constructor(
     val quickQuickSettingsViewModel: QuickQuickSettingsViewModel.Factory,
     val shadeHeaderViewModelFactory: ShadeHeaderViewModel.Factory,
     val mediaCarouselInteractor: MediaCarouselInteractor,
+    private val mediaInteractor: MediaInteractor,
     private val shadeModeInteractor: ShadeModeInteractor,
     val mediaViewModelFactory: MediaViewModel.Factory,
     private val footerActionsViewModelFactory: FooterActionsViewModel.Factory,
@@ -80,7 +83,17 @@ constructor(
     windowRootViewBlurInteractor: WindowRootViewBlurInteractor,
     mediaInRowInLandscapeViewModelFactory: MediaInRowInLandscapeViewModel.Factory,
     shadeStatusBarComponentsInteractor: ShadeStatusBarComponentsInteractor,
+    private val shadeInteractor: ShadeInteractor,
 ) : HydratedActivatable() {
+
+    val qsContainerViewModel = qsContainerViewModelFactory.create(supportsBrightnessMirroring = false)
+
+    val hasMediaCards: Boolean
+        get() = qsContainerViewModel.hasMediaCards
+
+    fun expandQuickSettings(loggingReason: String) {
+        shadeInteractor.expandQuickSettingsShade(loggingReason, null)
+    }
 
     /**
      * Whether the shade container transparency effect should be enabled (`true`), or whether to
@@ -111,6 +124,7 @@ constructor(
         // mediaCarouselInteractor.hasAnyMedia if in SplitShade.
         mediaCarouselInteractor.hasActiveMedia.hydratedStateOf()
 
+
     val isQsEnabled: Boolean by
         shadeStatusBarComponentsInteractor.disableFlags
             .map { it.isQuickSettingsEnabled() }
@@ -136,7 +150,10 @@ constructor(
         mediaInRowInLandscapeViewModelFactory.create(LOCATION_QQS, qqsMediaUiBehavior)
 
     override suspend fun onActivated() {
-        coroutineScope { launch { qqsMediaInRowViewModel.activate() } }
+        coroutineScope {
+            launch { qqsMediaInRowViewModel.activate() }
+            launch { qsContainerViewModel.activate() }
+        }
     }
 
     /**

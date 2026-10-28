@@ -18,6 +18,17 @@
 
 package com.android.systemui.qs.panels.ui.compose.infinitegrid
 
+import android.database.ContentObserver
+import android.os.UserHandle
+import android.provider.Settings
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+
 import android.content.Context
 import android.content.res.Resources
 import android.os.Trace
@@ -47,6 +58,8 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -99,6 +112,7 @@ import com.android.systemui.qs.panels.ui.viewmodel.AccessibilityUiState
 import com.android.systemui.qs.panels.ui.viewmodel.DetailsViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.IconProvider
 import com.android.systemui.qs.panels.ui.viewmodel.TileUiState
+import com.android.systemui.penguin.LocalQsPanels
 import com.android.systemui.qs.panels.ui.viewmodel.TileViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.toIconProvider
 import com.android.systemui.qs.panels.ui.viewmodel.toUiState
@@ -140,6 +154,7 @@ fun ContentScope.Tile(
     tile: TileViewModel,
     iconOnly: Boolean,
     squishiness: () -> Float,
+    isHeaderTile: Boolean = false,
     coroutineScope: CoroutineScope,
     bounceableInfo: BounceableInfo,
     tileHapticsViewModelFactory: TileHapticsViewModel.Factory,
@@ -169,15 +184,23 @@ fun ContentScope.Tile(
                 tile.state.collect { value = it.toIconProvider() }
             }
 
-        val colors = TileDefaults.getColorForState(uiState, iconOnly)
+        val tileStyle = LocalQsPanels.current?.panels?.tileStyle()
+        val stockColors = TileDefaults.getColorForState(uiState, iconOnly)
+        val colors = tileStyle?.colors(uiState, iconOnly, stockColors) ?: stockColors
         val hapticsViewModel: TileHapticsViewModel =
             rememberViewModel(traceName = "TileHapticsViewModel") {
                 tileHapticsViewModelFactory.create(tile)
             }
 
         // TODO(b/361789146): Draw the shapes instead of clipping
-        val tileShape by TileDefaults.animateTileShapeAsState(uiState)
-        val animatedColor by animateColorAsState(colors.background, label = "QSTileBackgroundColor")
+        val tileRadius = TileDefaults.tileRadius(uiState).let { tileStyle?.cornerRadius(uiState, it) ?: it }
+        val tileShape by TileDefaults.animateShapeAsState(tileRadius, "QSTileCornerRadius")
+        val animatedColor by
+            animateColorAsState(
+                colors.background,
+                tileColorSpec(),
+                label = "QSTileBackgroundColor",
+            )
         val isDualTarget = uiState.handlesToggleClick
         val interactionSource = remember { MutableInteractionSource() }
 
@@ -187,7 +210,7 @@ fun ContentScope.Tile(
             val marginBottom =
                 with(LocalDensity.current) { QuickSettingsShade.Dimensions.VerticalPadding.toPx() }
 
-            val animatedCornerRadius by animateDpAsState(TileDefaults.tileRadius(uiState))
+            val animatedCornerRadius by animateDpAsState(tileRadius)
 
             val inactiveCornerRadius = InactiveIconCornerRadius
             surfaceRevealModifier =
@@ -213,6 +236,9 @@ fun ContentScope.Tile(
         val expandable =
             if (dynamicTargetResolutionEnabled()) tile.expandable
             else remember { Expandable(mutableSetOf()) }
+        val round = tileStyle?.roundIconTiles == true
+        val effectiveSquishiness: () -> Float =
+            if (isHeaderTile) ({ 1f }) else squishiness
         Tooltip(
             text = uiState.label,
             modifier = modifier,
@@ -222,7 +248,7 @@ fun ContentScope.Tile(
                 expandable = expandable,
                 color = { animatedColor },
                 shape = tileShape,
-                squishiness = squishiness,
+                squishiness = effectiveSquishiness,
                 hapticsViewModel = hapticsViewModel,
                 modifier =
                     modifier
@@ -232,7 +258,10 @@ fun ContentScope.Tile(
                             tileShape.topEnd,
                         )
                         .sysuiResTag("tile_expandable")
-                        .fillMaxWidth()
+                        .then(
+                            if (iconOnly && round) Modifier.size(TileHeight)
+                            else Modifier.fillMaxWidth()
+                        )
                         .bounceable(
                             currentBounceableInfo.bounceable,
                             currentBounceableInfo.previousTile,
@@ -308,11 +337,22 @@ fun ContentScope.Tile(
                     isDualTarget = isDualTarget,
                     modifier = contentRevealModifier,
                 ) {
-                    val iconProvider: Context.() -> Icon = { getTileIcon(icon = icon) }
+                    val iconProvider: Context.() -> Icon =
+                        if (round && tileStyle != null) {
+                            { tileStyle.icon(tile.spec.spec, getTileIcon(icon = icon)) }
+                        } else {
+                            { getTileIcon(icon = icon) }
+                        }
                     if (iconOnly) {
                         SmallTileContent(
                             iconProvider = iconProvider,
                             color = colors.icon,
+                            size =
+                                if (round && tileStyle != null) {
+                                    { tileStyle.roundIconSize(TileHeight) }
+                                } else {
+                                    { CommonTileDefaults.SmallTileIconSize }
+                                },
                             modifier =
                                 Modifier.align(Alignment.Center).bounceScale {
                                     currentBounceableInfo.bounceable.iconBounceScale
@@ -338,7 +378,7 @@ fun ContentScope.Tile(
                             toggleClick = secondaryClick,
                             onLongClick = longClick,
                             accessibilityUiState = uiState.accessibilityUiState,
-                            squishiness = squishiness,
+                            squishiness = effectiveSquishiness,
                             isVisible = isVisible,
                             textScale = { currentBounceableInfo.bounceable.textBounceScale },
                             modifier =
@@ -363,17 +403,25 @@ private fun TileExpandable(
     modifier: Modifier = Modifier,
     content: @Composable (Expandable) -> Unit,
 ) {
+    val tileStyle = LocalQsPanels.current?.panels?.tileStyle()
     Expandable(
         expandable = expandable,
         controller = rememberExpandableController(color = color, shape = shape),
         modifier =
             modifier
+                .then(tileStyle?.run { Modifier.containerBehaviour() } ?: Modifier)
                 .clip(shape)
                 .motionTestValues { squishiness() exportAs TileMotionTestKeys.Squishness }
                 .verticalSquish(squishiness),
         useModifierBasedImplementation = true,
     ) {
-        content(hapticsViewModel?.createStateAwareExpandable(it) ?: it)
+        if (tileStyle != null) {
+            tileStyle.Container(shape) {
+                content(hapticsViewModel?.createStateAwareExpandable(it) ?: it)
+            }
+        } else {
+            content(hapticsViewModel?.createStateAwareExpandable(it) ?: it)
+        }
     }
 }
 
@@ -388,11 +436,14 @@ fun TileContainer(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val round = iconOnly && LocalQsPanels.current?.panels?.tileStyle()?.roundIconTiles == true
     Box(
         modifier =
             modifier
-                .height(TileHeight)
-                .fillMaxWidth()
+                .then(
+                    if (round) Modifier.size(TileHeight)
+                    else Modifier.height(TileHeight).fillMaxWidth()
+                )
                 .tileCombinedClickable(
                     onClick = onClick ?: {},
                     onLongClick = onLongClick,
@@ -515,6 +566,11 @@ data class TileColors(
     val label: Color,
     val secondaryLabel: Color,
     val icon: Color,
+    val outline: Color = Color.Transparent,
+    val classicLabel: Color = label,
+    val classicSecondaryLabel: Color = secondaryLabel,
+    val backgroundGradient: Brush? = null,
+    val circleAroundIcon: Color = Color.Transparent,
 )
 
 @VisibleForTesting
@@ -663,4 +719,39 @@ private object TileDefaults {
 private fun resources(): Resources {
     LocalConfiguration.current
     return LocalResources.current
+}
+
+
+@Composable
+fun rememberQSPanelStyle(): Boolean {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+    fun readPanelStyleEnabled(): Boolean =
+        try { Settings.System.getIntForUser(contentResolver, Settings.System.QS_PANEL_STYLE, 0, UserHandle.USER_CURRENT) != 0 } catch (_: Throwable) { false }
+    var classicStyleEnabled by remember { mutableStateOf(readPanelStyleEnabled()) }
+    DisposableEffect(contentResolver) {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) { classicStyleEnabled = readPanelStyleEnabled() }
+        }
+        contentResolver.registerContentObserver(Settings.System.getUriFor(Settings.System.QS_PANEL_STYLE), false, observer, UserHandle.USER_ALL)
+        onDispose { contentResolver.unregisterContentObserver(observer) }
+    }
+    return classicStyleEnabled
+}
+
+@Composable
+fun rememberTileShapeMode(): Int {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+    fun readShapeMode(): Int =
+        try { Settings.System.getIntForUser(contentResolver, Settings.System.QS_TILE_SHAPE, 0, UserHandle.USER_CURRENT) } catch (_: Throwable) { 0 }
+    var shapeMode by remember { mutableIntStateOf(readShapeMode()) }
+    DisposableEffect(contentResolver) {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) { shapeMode = readShapeMode() }
+        }
+        contentResolver.registerContentObserver(Settings.System.getUriFor(Settings.System.QS_TILE_SHAPE), false, observer, UserHandle.USER_ALL)
+        onDispose { contentResolver.unregisterContentObserver(observer) }
+    }
+    return shapeMode
 }
