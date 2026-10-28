@@ -43,11 +43,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.SettingsInputAntenna
-import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
@@ -74,11 +72,6 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.lifecycle.compose.LifecycleStartEffect
 import com.android.compose.animation.scene.ContentScope
 import com.android.systemui.scene.shared.model.Overlays
@@ -93,7 +86,6 @@ import com.android.systemui.qs.composefragment.ConnectivityFolder
 import com.android.systemui.qs.composefragment.ConnectivityFolderExpansion
 import com.android.systemui.qs.composefragment.ControlCentreNotPlaying
 import com.android.systemui.qs.composefragment.OneUiExtraDimButton
-import com.android.systemui.qs.composefragment.PenguinSoundMode
 import com.android.systemui.qs.composefragment.OneUiSoundModeButton
 import com.android.systemui.qs.composefragment.OneUiTileControl
 import com.android.systemui.qs.composefragment.OneUiTogglesCard
@@ -106,7 +98,6 @@ import com.android.systemui.qs.composefragment.secureSetting
 import com.android.systemui.qs.panels.ui.compose.FOLDER_SPEC
 import com.android.systemui.qs.panels.ui.compose.MEDIA_SPEC
 import com.android.systemui.qs.panels.ui.compose.PenguinGrid
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.LocalQsTileHeight
 import com.android.systemui.qs.panels.ui.compose.TileGrid
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.shared.ui.QuickSettings.Elements
@@ -197,7 +188,7 @@ private val WideReservedHeight = 96.dp
 
 @Composable
 private fun penguinCell(): Dp =
-    LocalPenguinCell.current ?: 64.dp
+    LocalPenguinCell.current ?: dimensionResource(id = R.dimen.common_tile_default_tile_height)
 
 @Composable
 private fun wideCell(): Dp {
@@ -241,10 +232,9 @@ internal fun rememberPenguinGridModel(viewModel: QuickSettingsContainerViewModel
     val raw = secureStringSetting(flavor.setting)
     return remember(raw, modules, tiles, largeTiles, flavor) {
         val saved = PenguinGrid.parse(raw)
-        val defaultPills = largeTiles.filter { it.spec in setOf("wifi", "internet", "bt", "cell") }.toSet()
         val resolved =
             saved?.let { PenguinGrid.resolve(it, modules, tiles, largeTiles, flavor = flavor) }
-                ?: PenguinGrid.defaults(modules, tiles, defaultPills, flavor)
+                ?: PenguinGrid.defaults(modules, tiles, largeTiles, flavor)
         PenguinGridModel(
             modules = modules,
             tiles = tiles,
@@ -593,7 +583,6 @@ internal fun ContentScope.GridItemContent(
                     onEdit = if (preview) ({ OneUiToggleEditing.active = true }) else null,
                 )
             }
-            PenguinGrid.SOUND_SPEC -> PenguinSoundMode(height)
             PenguinGrid.ONEUI_SOUND_SPEC ->
                 Box(Modifier.height(height).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     OneUiSoundModeButton(height)
@@ -682,40 +671,13 @@ internal fun ContentScope.GridItemContent(
                             )
                         }
                 } else {
-                    val tile = viewModel.tileGridViewModel.tileViewModels
-                        .firstOrNull { it.spec == item.spec }
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        CompositionLocalProvider(
-                            LocalQsTileHeight provides if (item.w == 1) 52.dp else 56.dp
-                        ) {
-                            TileGrid(
-                                viewModel = viewModel.tileGridViewModel,
-                                includeSpecs = listOf(item.spec),
-                                columnsOverride = item.w,
-                                forceLargeTiles = item.w > 1,
-                                listening = listening,
-                            )
-                        }
-                        if (item.w == 1 && tile != null) {
-                            val state by tile.state.collectAsState(initial = tile.currentState)
-                            Text(
-                                text = state.label?.toString().orEmpty(),
-                                color = MaterialTheme.colorScheme.onSurface.copy(
-                                    alpha = if (state.state == 0) 0.38f else 0.85f
-                                ),
-                                fontSize = 10.sp,
-                                lineHeight = 12.sp,
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth()
-                                    .semantics { hideFromAccessibility() },
-                            )
-                        }
-                    }
+                    TileGrid(
+                        viewModel = viewModel.tileGridViewModel,
+                        includeSpecs = listOf(item.spec),
+                        columnsOverride = item.w,
+                        forceLargeTiles = item.w > 1,
+                        listening = listening,
+                    )
                 }
         }
     }

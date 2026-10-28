@@ -54,7 +54,6 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.Icon as MaterialIcon
@@ -487,45 +486,6 @@ private fun OneUiMediaVolumeSlider(modifier: Modifier = Modifier) {
             tint = Color(0xFF1C1B1F),
             modifier = Modifier.padding(start = 24.dp).size(26.dp),
         )
-    }
-}
-
-@Composable
-fun PenguinSoundMode(height: Dp) {
-    val (audioManager, audio) = rememberAudioState()
-    val shape = RoundedCornerShape(28.dp)
-    val modes = listOf(
-        AudioManager.RINGER_MODE_NORMAL to Icons.Rounded.Notifications,
-        AudioManager.RINGER_MODE_VIBRATE to Icons.Rounded.Vibration,
-        AudioManager.RINGER_MODE_SILENT to Icons.Rounded.NotificationsOff,
-    )
-    val labels = listOf(
-        R.string.volume_ringer_status_normal,
-        R.string.volume_ringer_status_vibrate,
-        R.string.volume_ringer_status_silent,
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth().height(minOf(height, 56.dp))
-            .clip(shape).background(oneUiOff()).glassRim(shape).padding(6.dp),
-        horizontalArrangement = spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        modes.forEachIndexed { index, (mode, glyph) ->
-            val selected = audio.ringerMode == mode
-            Box(
-                modifier = Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
-                    .background(if (selected) Color.White else Color.Transparent)
-                    .clickable { audioManager.ringerModeInternal = mode },
-                contentAlignment = Alignment.Center,
-            ) {
-                MaterialIcon(
-                    imageVector = glyph,
-                    contentDescription = stringResource(labels[index]),
-                    tint = if (selected) Color(0xFFEF5350) else Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
     }
 }
 

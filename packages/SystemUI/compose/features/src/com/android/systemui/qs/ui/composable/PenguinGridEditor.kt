@@ -1308,7 +1308,6 @@ private fun AddControlSheet(
             PenguinGrid.BRIGHTNESS_SPEC to stringResource(R.string.penguin_cc_brightness),
             PenguinGrid.VOLUME_SPEC to stringResource(R.string.penguin_cc_volume),
             PenguinGrid.ONEUI_TOGGLES_SPEC to stringResource(R.string.oneui_toggles),
-            PenguinGrid.SOUND_SPEC to stringResource(R.string.oneui_sound_mode),
             PenguinGrid.ONEUI_SOUND_SPEC to stringResource(R.string.oneui_sound_mode),
         )
     val moduleIcons =
@@ -1318,7 +1317,6 @@ private fun AddControlSheet(
             PenguinGrid.BRIGHTNESS_SPEC to Icons.Rounded.BrightnessHigh,
             PenguinGrid.VOLUME_SPEC to Icons.AutoMirrored.Rounded.VolumeUp,
             PenguinGrid.ONEUI_TOGGLES_SPEC to Icons.Rounded.Apps,
-            PenguinGrid.SOUND_SPEC to Icons.Rounded.Vibration,
             PenguinGrid.ONEUI_SOUND_SPEC to Icons.Rounded.Vibration,
         )
     val onPage = currentPage.map { it.spec }.toSet()

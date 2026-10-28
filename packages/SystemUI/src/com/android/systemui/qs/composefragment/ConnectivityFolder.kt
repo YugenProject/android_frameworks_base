@@ -80,6 +80,7 @@ import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.shared.style.LiquidGlassControl
 import com.android.systemui.qs.shared.style.LiquidGlassGlyphs
 import com.android.systemui.qs.shared.style.LiquidGlassSurface
+import com.android.systemui.qs.shared.style.LocalQsPanelStyle
 import com.android.systemui.qs.shared.style.QsPanelStyle
 import com.android.systemui.qs.shared.style.glassPress
 import com.android.systemui.qs.shared.style.glassRim
@@ -300,8 +301,20 @@ private fun ConnectivityFolderContent(
 ) {
     val bySpec = remember(tiles) { tiles.associateBy { it.spec.spec } }
     val (largeSpecs, smallSpecs) = folderSpecs()
-    val large = remember(bySpec, largeSpecs) { largeSpecs.mapNotNull { bySpec[it] } }
-    val small = remember(bySpec, smallSpecs) { smallSpecs.mapNotNull { bySpec[it] } }
+    val (large, small) =
+        remember(bySpec, largeSpecs, smallSpecs) {
+            val large = largeSpecs.mapNotNull { bySpec[it] }.toMutableList()
+            val small = smallSpecs.mapNotNull { bySpec[it] }.toMutableList()
+            // A device without one of the large tiles (a tablet has no mobile data) would leave
+            // its big slot empty and crowd the rest into the small cluster. Fill the slot from
+            // the small tiles instead, Bluetooth first.
+            while (large.size < largeSpecs.size && small.isNotEmpty()) {
+                val next = small.firstOrNull { it.spec.spec == "bt" } ?: small.first()
+                small.remove(next)
+                large.add(next)
+            }
+            large.toList() to small.toList()
+        }
 
     if (large.isEmpty() && small.isEmpty()) return
 
@@ -670,8 +683,18 @@ internal fun Context.folderIcon(icon: IconProvider): Icon {
 
 const val SETTING_QS_CONNECTIVITY_FOLDER = "qs_connectivity_folder"
 
+/**
+ * Whether the QS panel draws its connectivity folder.
+ *
+ * The folder is what the Penguin panel's first page is built around, so it is on unless the user
+ * turns it off. The other panel styles lay their own Quick Settings out and keep it off until
+ * asked for it, which is what the setting reads as when it has never been written.
+ */
 @Composable
-fun connectivityFolderEnabled(): Boolean = secureIntSetting(SETTING_QS_CONNECTIVITY_FOLDER, 0) != 0
+fun connectivityFolderEnabled(): Boolean {
+    val stored = secureIntSetting(SETTING_QS_CONNECTIVITY_FOLDER, -1)
+    return if (stored < 0) LocalQsPanelStyle.current == QsPanelStyle.Penguin else stored != 0
+}
 
 internal fun TileViewModel.primaryAction(uiState: TileUiState) {
     if (uiState.handlesToggleClick) toggleClick() else mainClick(null)

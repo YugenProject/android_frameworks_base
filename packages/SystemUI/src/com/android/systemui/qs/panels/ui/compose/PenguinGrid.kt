@@ -24,7 +24,7 @@ import org.json.JSONObject
 object PenguinGrid {
     const val COLUMNS = 4
 
-    const val MAX_ROWS = 7
+    const val MAX_ROWS = 6
 
     const val SETTING = "qs_penguin_grid"
 
@@ -35,9 +35,7 @@ object PenguinGrid {
 
     val ONEUI_SOUND_SPEC = TileSpec.create("penguin_oneui_sound")
 
-    val SOUND_SPEC = TileSpec.create("penguin_sound")
-
-    val MODULE_SPECS = listOf(FOLDER_SPEC, MEDIA_SPEC, BRIGHTNESS_SPEC, VOLUME_SPEC, SOUND_SPEC)
+    val MODULE_SPECS = listOf(FOLDER_SPEC, MEDIA_SPEC, BRIGHTNESS_SPEC, VOLUME_SPEC)
 
     private val ONEUI_MODULE_SPECS =
         listOf(ONEUI_TOGGLES_SPEC, BRIGHTNESS_SPEC, VOLUME_SPEC, ONEUI_SOUND_SPEC, MEDIA_SPEC)
@@ -85,7 +83,6 @@ object PenguinGrid {
 
     private fun controlCentreSizes(spec: TileSpec): List<Pair<Int, Int>> =
         when (spec) {
-            SOUND_SPEC -> listOf(2 to 1)
             MEDIA_SPEC -> listOf(2 to 2, 4 to 2, 4 to 4, 4 to 6)
             FOLDER_SPEC -> listOf(2 to 2, 4 to 4, 4 to 6)
             BRIGHTNESS_SPEC,
@@ -229,33 +226,20 @@ object PenguinGrid {
         flavor: Flavor = Flavor.ControlCentre,
     ): List<List<Item>> {
         if (flavor == Flavor.OneUi) return oneUiDefaults(modules, tiles, largeTiles)
-        val wifi = tiles.firstOrNull { it.spec == "wifi" || it.spec == "internet" }
-        val bluetooth = tiles.firstOrNull { it.spec == "bt" }
-        val mobile = tiles.firstOrNull { it.spec == "cell" }
+        // The first page holds the modules only. Everything else fills in around them, so the
+        // panel opens with the connectivity folder and the media player instead of a row of
+        // connectivity pills above them.
         val first =
-            if (FOLDER_SPEC in modules) {
-                listOf(
-                    Item(FOLDER_SPEC, 0, 0, 2, 2),
-                    Item(MEDIA_SPEC, 2, 0, 2, 2),
-                    Item(BRIGHTNESS_SPEC, 2, 2, 1, 2),
-                    Item(VOLUME_SPEC, 3, 2, 1, 2),
-                    Item(SOUND_SPEC, 0, 4, 2, 1),
-                )
-            } else {
-                listOfNotNull(
-                    wifi?.let { Item(it, 0, 0, 2, 1) },
-                    bluetooth?.let { Item(it, 2, 0, 2, 1) },
-                    Item(MEDIA_SPEC, 0, 1, 2, 2),
-                    Item(BRIGHTNESS_SPEC, 2, 1, 1, 2),
-                    Item(VOLUME_SPEC, 3, 1, 1, 2),
-                    Item(SOUND_SPEC, 0, 3, 2, 1),
-                    mobile?.let { Item(it, 2, 3, 2, 1) },
-                )
-            }
-        val present = first.filter { !isModule(it.spec) || it.spec in modules }
+            listOf(
+                Item(FOLDER_SPEC, 0, 0, 2, 2),
+                Item(MEDIA_SPEC, 2, 0, 2, 2),
+                Item(BRIGHTNESS_SPEC, 2, 2, 1, 2),
+                Item(VOLUME_SPEC, 3, 2, 1, 2),
+            )
+                .filter { it.spec in modules }
         val pages =
             listOfNotNull(
-                present,
+                first,
                 listOf(Item(MEDIA_SPEC, 0, 0, 4, 4)).takeIf { MEDIA_SPEC in modules },
                 listOf(Item(FOLDER_SPEC, 0, 0, 4, 4)).takeIf { FOLDER_SPEC in modules },
             )
