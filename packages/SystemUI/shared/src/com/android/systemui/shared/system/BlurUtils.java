@@ -18,8 +18,6 @@ package com.android.systemui.shared.system;
 
 import static android.view.CrossWindowBlurListeners.CROSS_WINDOW_BLUR_SUPPORTED;
 
-import static com.android.systemui.Flags.blurOnMoreSurfaces;
-
 import android.app.ActivityManager;
 import android.content.res.Resources;
 import android.os.SystemProperties;
@@ -36,8 +34,17 @@ public abstract class BlurUtils {
                 && !SystemProperties.getBoolean("persist.sysui.disableBlur", false);
     }
 
+    /**
+     * Whether the volume panel and the power menu should be drawn over a blur.
+     *
+     * <p>Yugen ships this as part of the default look, so it follows the device's blur expansion
+     * support instead of the {@code blur_on_more_surfaces} aconfig rollout flag, which defaults to
+     * off and is not flipped by a release config in this tree. Devices that cannot expand blur
+     * keep the plain translucent panel (the call sites already honour the per-window blur support
+     * reported by {@code WindowRootViewBlurInteractor}).
+     */
     public static boolean isVolumeAndPowerBlurEnabled() {
-        return blurOnMoreSurfaces() && isBlurExpansionEnabledOnDevice();
+        return isBlurExpansionEnabledOnDevice();
     }
 
     private static boolean isBlurExpansionEnabledOnDevice() {
