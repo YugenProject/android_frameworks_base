@@ -31,10 +31,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.internal.graphics.drawable.BackgroundBlurDrawable
-import com.android.systemui.Dependency
 import com.android.systemui.Flags
 import com.android.systemui.Flags.enableLockscreenBlur
-import com.android.systemui.biometrics.UdfpsIconDrawable
 import com.android.systemui.common.ui.view.BackgroundBlurAlphaSync
 import com.android.systemui.common.ui.view.TouchHandlingView
 import com.android.systemui.keyguard.ui.view.DeviceEntryIconView
@@ -47,7 +45,6 @@ import com.android.systemui.penguin.CosFeatures
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.VibratorHelper
-import com.android.systemui.tuner.TunerService
 import com.android.systemui.util.kotlin.DisposableHandles
 import com.android.systemui.window.domain.interactor.WindowRootViewBlurInteractor
 import com.google.android.msdl.data.model.MSDLToken
@@ -56,24 +53,11 @@ import kotlin.math.min
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DisposableHandle
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.SharingStarted
-import android.provider.Settings
-import android.os.UserHandle
 
 object DeviceEntryIconViewBinder {
     private const val TAG = "DeviceEntryIconViewBinder"
-
-    private final val UDFPS_ICON: String =
-            "system:" + Settings.System.UDFPS_ICON
 
     /**
      * Updates UI for:
@@ -98,38 +82,6 @@ object DeviceEntryIconViewBinder {
         overrideColor: Color? = null,
     ): DisposableHandle {
         val disposables = DisposableHandles()
-
-        val packageInstalled =
-            try {
-                view.context.packageManager.getPackageInfo("com.crdroid.udfps.icons", 0)
-                true
-            } catch (e: Exception) {
-                false
-            }
-
-        val tunerScope =
-            CoroutineScope(
-                applicationScope.coroutineContext +
-                    SupervisorJob(applicationScope.coroutineContext[Job])
-            )
-        disposables += DisposableHandle { tunerScope.cancel() }
-
-        val shouldUseCustomUdfpsIcon: StateFlow<Boolean> = callbackFlow {
-            val callback = object : TunerService.Tunable {
-                override fun onTuningChanged(key: String, newValue: String?) {
-                    if (key == UDFPS_ICON) {
-                        trySend(TunerService.parseIntegerSwitch(newValue, false)).isSuccess
-                    }
-                }
-            }
-            Dependency.get(TunerService::class.java).addTunable(callback, UDFPS_ICON)
-
-            awaitClose { Dependency.get(TunerService::class.java).removeTunable(callback) }
-        }.stateIn(
-            scope = tunerScope,
-            started = SharingStarted.Eagerly,
-            initialValue = false
-        )
 
         val touchHandlingView = view.touchHandlingView
         val fgIconView = view.iconView
@@ -186,20 +138,8 @@ object DeviceEntryIconViewBinder {
                 repeatOnLifecycle(Lifecycle.State.CREATED) {
                     launch("$TAG#viewModel.useBackgroundProtection") {
                         viewModel.useBackgroundProtection.collect { useBackgroundProtection ->
-                            if (shouldUseCustomUdfpsIcon.value && packageInstalled) {
-                                bgView.visibility = View.GONE
-                            } else {
-                                bgView.visibility = if (useBackgroundProtection) View.VISIBLE else View.GONE
-                            }
-                        }
-                    }
-                    launch("$TAG#shouldUseCustomUdfpsIcon") {
-                        shouldUseCustomUdfpsIcon.collect { useCustomIcon ->
-                            if (useCustomIcon && packageInstalled) {
-                                bgView.visibility = View.GONE
-                            } else {
-                                bgView.visibility = if (viewModel.useBackgroundProtection.value) View.VISIBLE else View.GONE
-                            }
+                            bgView.visibility =
+                                if (useBackgroundProtection) View.VISIBLE else View.GONE
                         }
                     }
                     launch("$TAG#viewModel.burnInOffsets") {
@@ -322,16 +262,12 @@ object DeviceEntryIconViewBinder {
                             }
                             fgIconView.imageTintList =
                                 ColorStateList.valueOf(overrideColor?.toArgb() ?: viewModel.tint)
-                            if (fgIconView.drawable.current !is UdfpsIconDrawable) {
-                                fgIconView.setPadding(
-                                    viewModel.padding,
-                                    viewModel.padding,
-                                    viewModel.padding,
-                                    viewModel.padding
-                                )
-                            } else {
-                                fgIconView.setPadding(0, 0, 0, 0)
-                            }
+                            fgIconView.setPadding(
+                                viewModel.padding,
+                                viewModel.padding,
+                                viewModel.padding,
+                                viewModel.padding
+                            )
                             // Invalidate, just in case the padding changes just after icon changes
                             fgIconView.invalidate()
                         }
@@ -359,9 +295,9 @@ object DeviceEntryIconViewBinder {
 
                         // The blur region only knows the drawable's own alpha: follow the alpha
                         // (and visibility) the background is really drawn with - keyguard root
-                        // fade on unlock, shade drag, bgViewModel alpha, custom UDFPS icon hiding
-                        // the background - so the blur never outlives the view. This is the only
-                        // writer of the blur drawable's alpha.
+                        // fade on unlock, shade drag, bgViewModel alpha - so the blur never
+                        // outlives the view. This is the only writer of the blur drawable's
+                        // alpha.
                         launch("$TAG#blurAlphaSync") {
                             val blurAlphaSync =
                                 BackgroundBlurAlphaSync(bgView) {
@@ -397,11 +333,7 @@ object DeviceEntryIconViewBinder {
                         ) { color, cos ->
                             if (cos) android.graphics.Color.TRANSPARENT else color
                         }.collect { color ->
-                            if (!shouldUseCustomUdfpsIcon.value || !packageInstalled) {
-                                bgView.imageTintList = ColorStateList.valueOf(color)
-                            } else {
-                                bgView.imageTintList = null
-                            }
+                            bgView.imageTintList = ColorStateList.valueOf(color)
                         }
                     }
                 }
