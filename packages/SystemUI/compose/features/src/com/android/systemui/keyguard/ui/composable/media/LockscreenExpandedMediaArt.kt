@@ -51,7 +51,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.android.systemui.util.WallpaperDepthUtils
 import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -78,12 +77,6 @@ fun LockscreenExpandedMediaArt(alpha: () -> Float, modifier: Modifier = Modifier
                 }
             }
     }
-    LaunchedEffect(Unit) {
-        snapshotFlow { state.fraction > 0f || (state.enabled && state.mediaVisible) }
-            .distinctUntilChanged()
-            .collect { WallpaperDepthUtils.setExpandedMediaArtVisible(it) }
-    }
-
     LaunchedEffect(Unit) { snapshotFlow { alpha() }.collect { state.lockscreenAlpha = it } }
 
     val context = LocalContext.current
