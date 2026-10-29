@@ -103,6 +103,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
 import android.widget.LinearLayout;
+import android.widget.ListAdapter;
 import android.widget.ListPopupWindow;
 import android.widget.TextView;
 import android.window.OnBackInvokedCallback;
@@ -148,6 +149,7 @@ import com.android.systemui.display.shared.model.DisplayWindowProperties;
 import com.android.systemui.globalactions.domain.interactor.GlobalActionsInteractor;
 import com.android.systemui.globalactions.shared.model.GlobalActionType;
 import com.android.systemui.globalactions.shared.model.GlobalActionsEvent;
+import com.android.systemui.penguin.PowerMenuLayout;
 import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryInteractor;
 import com.android.systemui.plugins.GlobalActions.GlobalActionsManager;
@@ -189,6 +191,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 
@@ -1839,6 +1842,11 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mShowingRestartOptions = show;
         }
 
+        /** Whether pressing {@code action} opens a sub menu instead of running it right away. */
+        public boolean opensSubMenu(@NonNull Action action) {
+            return action instanceof RestartAction && shouldShowRestartSubmenu();
+        }
+
         private int countItems(boolean separated) {
             int count = 0;
             List<Action> items = mShowingRestartOptions ? mRestartItems : mItems;
@@ -2919,11 +2927,17 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         private final GestureDetector mGestureDetector;
         @NonNull
         private final DeviceEntryInteractor mDeviceEntryInteractor;
+        @NonNull
+        private final Optional<PowerMenuLayout> mPowerMenuLayout;
 
         @VisibleForTesting
         @Nullable
         SystemUIDialog mCurrentDialog;
         private GlobalActionsLayoutLite mGlobalActionsLayout;
+        @Nullable
+        private View mAnimatedContent;
+        @Nullable
+        private Drawable mBackdrop;
         @Nullable
         private ScrimDrawable mBackgroundDrawable;
         @Nullable
@@ -3010,7 +3024,8 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 @NonNull AccessibilityManager accessibilityManager,
                 @NonNull DialogTransitionAnimator dialogTransitionAnimator,
                 @NonNull SystemUIDialog.Factory systemUIDialogFactory,
-                @NonNull DeviceEntryInteractor deviceEntryInteractor) {
+                @NonNull DeviceEntryInteractor deviceEntryInteractor,
+                @NonNull Optional<PowerMenuLayout> powerMenuLayout) {
             mContext = context;
             mAdapter = adapter;
             mOverflowAdapter = overflowAdapter;
@@ -3035,15 +3050,21 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mSystemUIDialogFactory = systemUIDialogFactory;
             mGestureDetector = new GestureDetector(context, mGestureListener);
             mDeviceEntryInteractor = deviceEntryInteractor;
+            mPowerMenuLayout = powerMenuLayout;
             mOnBackInvokedCallback = () -> {
                 logOnBackInvocation();
-                if (mAdapter.isShowingRestartOptions()) {
+                if (mAdapter.isShowingRestartOptions() && mGlobalActionsLayout != null) {
                     mAdapter.setShowingRestartOptions(false);
                     mGlobalActionsLayout.updateList();
                 } else {
                     dismiss();
                 }
             };
+        }
+
+        @Nullable
+        private PowerMenuLayout activeLayout(@NonNull Context context) {
+            return mPowerMenuLayout.filter(layout -> layout.isActive(context)).orElse(null);
         }
 
         @NonNull
@@ -3119,13 +3140,50 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
 
         public void showPowerOptionsMenu() {
-            mPowerOptionsDialog = GlobalActionsPowerDialog.create(mContext, mPowerOptionsAdapter);
-            mPowerOptionsDialog.show();
+            mPowerOptionsDialog = createSubMenu(mPowerOptionsAdapter);
+            showSubMenu(mPowerOptionsDialog);
         }
 
         public void showRestartOptionsMenu() {
-            mAdapter.setShowingRestartOptions(true);
-            mGlobalActionsLayout.updateList();
+            PowerMenuLayout layout = activeLayout(mContext);
+            if (layout == null) {
+                mAdapter.setShowingRestartOptions(true);
+                mGlobalActionsLayout.updateList();
+                return;
+            }
+            mRestartOptionsDialog = createSubMenu(mRestartOptionsAdapter);
+            showSubMenu(mRestartOptionsDialog);
+        }
+
+        @NonNull
+        private Dialog createSubMenu(@NonNull ListAdapter adapter) {
+            PowerMenuLayout layout = activeLayout(mContext);
+            if (layout != null) {
+                return layout.createSubMenu(mContext, adapter, isSubMenuBlurSupported());
+            }
+            return GlobalActionsPowerDialog.create(mContext, adapter);
+        }
+
+        private void showSubMenu(@NonNull Dialog subMenu) {
+            final View parentContent = mAnimatedContent;
+            if (parentContent != null) {
+                parentContent.setVisibility(View.INVISIBLE);
+                subMenu.setOnDismissListener(d -> parentContent.setVisibility(View.VISIBLE));
+            }
+            subMenu.show();
+        }
+
+        private boolean isSubMenuBlurSupported() {
+            if (!isVolumeAndPowerBlurEnabled()) {
+                return false;
+            }
+            if (!mContext.getResources().getBoolean(
+                    com.android.systemui.res.R.bool.config_translucentStandalonePowerMenu)) {
+                return false;
+            }
+            final SystemUIDialog dialog = mCurrentDialog;
+            return dialog != null
+                    && dialog.getBlurInteractor().isBlurCurrentlySupported().getValue();
         }
 
         public void showUsersMenu() {
@@ -3139,11 +3197,19 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
 
         private void initializeLayout(@NonNull SystemUIDialog dialog) {
+            PowerMenuLayout powerMenuLayout = activeLayout(dialog.getContext());
+            if (powerMenuLayout != null) {
+                powerMenuLayout.inflate(dialog, mLayoutHost);
+                return;
+            }
+
             dialog.setContentView(com.android.systemui.res.R.layout.global_actions_grid_lite);
             fixNavBarClipping(dialog);
 
             mGlobalActionsLayout =
                     dialog.findViewById(com.android.systemui.res.R.id.global_actions_view);
+            mAnimatedContent = mGlobalActionsLayout;
+            mBackdrop = null;
             mGlobalActionsLayout.setListViewAccessibilityDelegate(new View.AccessibilityDelegate() {
                 @Override
                 public boolean dispatchPopulateAccessibilityEvent(
@@ -3199,6 +3265,95 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             }
         }
 
+        private final PowerMenuLayout.Host mLayoutHost = new PowerMenuLayout.Host() {
+            @Nullable
+            @Override
+            public PowerMenuLayout.Option findOption(int kind) {
+                Action action = findAction(switch (kind) {
+                    case POWER_OFF -> ShutDownAction.class;
+                    case RESTART -> RestartAction.class;
+                    case EMERGENCY -> EmergencyAction.class;
+                    default -> throw new IllegalArgumentException("Unknown option " + kind);
+                });
+                if (action == null) {
+                    return null;
+                }
+                return new PowerMenuLayout.Option() {
+                    @NonNull
+                    @Override
+                    public Drawable getIcon(@NonNull Context context) {
+                        return action.getIcon(context);
+                    }
+
+                    @Override
+                    public void trigger() {
+                        if (!mAdapter.opensSubMenu(action)) {
+                            dismissWithoutAnimation();
+                        }
+                        action.onPress();
+                    }
+                };
+            }
+
+            @Override
+            public void onContainerTouch(@NonNull MotionEvent event) {
+                mGestureDetector.onTouchEvent(event);
+            }
+
+            @Override
+            public boolean isBlurBackdropAllowed() {
+                return isVolumeAndPowerBlurEnabled() && mContext.getResources().getBoolean(
+                        com.android.systemui.res.R.bool.config_translucentStandalonePowerMenu);
+            }
+
+            @Override
+            public void setBlurSupported(boolean supported) {
+                // The grid layout owns the adapter blur state; the sub menu queries the dialog
+                // blur interactor directly instead.
+            }
+
+            @Override
+            public void close() {
+                mUiEventLogger.log(GlobalActionsEvent.GA_CLOSE_TAP_OUTSIDE);
+                dismiss();
+            }
+
+            @Override
+            public void setAnimatedContent(@NonNull View content, @Nullable Drawable backdrop) {
+                mAnimatedContent = content;
+                mBackdrop = backdrop;
+            }
+
+            @Override
+            public void onLayoutInflated(@NonNull Context context, @NonNull ViewGroup container) {
+                if (mBackgroundDrawable == null) {
+                    mBackgroundDrawable = new ScrimDrawable();
+                }
+                int user = mSelectedUserInteractor.getSelectedUserId();
+                if (mKeyguardShowing && mKeyguardUpdateMonitor.getUserHasTrust(user)) {
+                    mLockPatternUtils.requireCredentialEntry(user);
+                    showSmartLockDisabledMessage(context, container);
+                }
+            }
+        };
+
+        @Nullable
+        private Action findAction(@NonNull Class<? extends Action> type) {
+            for (int i = 0; i < mAdapter.getCount(); i++) {
+                Action action = mAdapter.getItem(i);
+                if (type.isInstance(action)) {
+                    return action;
+                }
+            }
+            for (int i = 0; i < mPowerOptionsAdapter.getCount(); i++) {
+                Action action = mPowerOptionsAdapter.getItem(i);
+                if (type.isInstance(action)) {
+                    return action;
+                }
+            }
+            return null;
+        }
+
         private void fixNavBarClipping(@NonNull SystemUIDialog dialog) {
             ViewGroup content = dialog.findViewById(android.R.id.content);
             content.setClipChildren(false);
@@ -3240,7 +3395,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onStart(@NonNull SystemUIDialog dialog) {
-            mGlobalActionsLayout.updateList();
+            if (mGlobalActionsLayout != null) {
+                mGlobalActionsLayout.updateList();
+            }
             mLightBarController.setGlobalActionsVisible(true);
 
             mColorExtractor.addOnColorsChangedListener(this);
@@ -3261,8 +3418,11 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
          * @param initialValue The initial unlock status of the device.
          */
         private void dismissWhenUnlockStatusChanges(boolean initialValue) {
+            if (mAnimatedContent == null) {
+                return;
+            }
             collectFlow(
-                    mGlobalActionsLayout,
+                    mAnimatedContent,
                     mDeviceEntryInteractor.isUnlocked(),
                     newValue -> {
                         if (newValue != initialValue) {
@@ -3359,6 +3519,14 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         /** Run either the enter or exit animation, then run {@code then}. */
         private void startAnimation(@NonNull SystemUIDialog dialog, boolean isEnter,
                 @Nullable Runnable then) {
+            final View content = mAnimatedContent;
+            final Drawable backdrop = mBackdrop;
+            if (content == null) {
+                if (then != null) {
+                    then.run();
+                }
+                return;
+            }
             ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
 
             // Note: these specs should be the same as in popup_enter_material and
@@ -3382,7 +3550,10 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 float progress = (float) valueAnimator.getAnimatedValue();
 
                 float alpha = isEnter ? progress : 1 - progress;
-                mGlobalActionsLayout.setAlpha(alpha);
+                content.setAlpha(alpha);
+                if (backdrop != null) {
+                    backdrop.setAlpha(Math.round(alpha * 255));
+                }
                 window.setDimAmount(mInitialWindowDimAmount * alpha);
 
                 // TODO(b/213872558): Support devices that don't have their power button on the
@@ -3391,16 +3562,16 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                         isEnter ? translationPx * (1 - progress) : translationPx * progress;
                 switch (rotation) {
                     case Surface.ROTATION_0:
-                        mGlobalActionsLayout.setTranslationX(translation);
+                        content.setTranslationX(translation);
                         break;
                     case Surface.ROTATION_90:
-                        mGlobalActionsLayout.setTranslationY(-translation);
+                        content.setTranslationY(-translation);
                         break;
                     case Surface.ROTATION_180:
-                        mGlobalActionsLayout.setTranslationX(-translation);
+                        content.setTranslationX(-translation);
                         break;
                     case Surface.ROTATION_270:
-                        mGlobalActionsLayout.setTranslationY(translation);
+                        content.setTranslationY(translation);
                         break;
                 }
             });
@@ -3410,13 +3581,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
                 @Override
                 public void onAnimationStart(@NonNull Animator animation, boolean isReverse) {
-                    mPreviousLayerType = mGlobalActionsLayout.getLayerType();
-                    mGlobalActionsLayout.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                    mPreviousLayerType = content.getLayerType();
+                    content.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 }
 
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    mGlobalActionsLayout.setLayerType(mPreviousLayerType, null);
+                    content.setLayerType(mPreviousLayerType, null);
                     if (then != null) {
                         then.run();
                     }
@@ -3510,7 +3681,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             dismissUsers();
 
             // Update the list as the max number of items per row has probably changed.
-            mGlobalActionsLayout.updateList();
+            if (mGlobalActionsLayout != null) {
+                mGlobalActionsLayout.updateList();
+            }
         }
 
         private void onRotate(int from, int to) {

@@ -5,6 +5,7 @@
 
 package com.android.systemui.penguin
 
+import com.android.systemui.globalactions.IosPowerMenuLayout
 import com.android.systemui.keyguard.ui.composable.media.ExpandableLockscreenPlayer
 import com.penguin.systemui.qs.PenguinQsPanels
 import com.penguin.systemui.qs.PenguinShadeMotion
@@ -16,10 +17,13 @@ import dagger.Module
 interface PenguinHooksModule {
     @BindsOptionalOf fun depthSubject(): DepthSubject
     @BindsOptionalOf fun lockscreenPlayerOptional(): LockscreenPlayer
+    @BindsOptionalOf fun powerMenuLayoutOptional(): PowerMenuLayout
     @BindsOptionalOf fun qsPanelsOptional(): QsPanels
     @BindsOptionalOf fun shadeMotionOptional(): ShadeMotion
 
     @Binds fun lockscreenPlayer(player: ExpandableLockscreenPlayer): LockscreenPlayer
+
+    @Binds fun powerMenuLayout(layout: IosPowerMenuLayout): PowerMenuLayout
 
     @Binds fun qsPanels(panels: PenguinQsPanels): QsPanels
 
