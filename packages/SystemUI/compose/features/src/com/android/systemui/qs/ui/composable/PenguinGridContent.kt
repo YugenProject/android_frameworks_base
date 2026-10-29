@@ -232,9 +232,26 @@ internal fun rememberPenguinGridModel(viewModel: QuickSettingsContainerViewModel
     val raw = secureStringSetting(flavor.setting)
     return remember(raw, modules, tiles, largeTiles, flavor) {
         val saved = PenguinGrid.parse(raw)
-        val resolved =
-            saved?.let { PenguinGrid.resolve(it, modules, tiles, largeTiles, flavor = flavor) }
-                ?: PenguinGrid.defaults(modules, tiles, largeTiles, flavor)
+        val resolved: List<List<PenguinGrid.Item>>
+        if (saved != null) {
+            // A saved layout from before the connectivity folder existed has no folder item, but
+            // its connectivity tiles are filtered out of `tiles` while the folder is enabled.
+            // Resolving that layout would drop both. Prepend the default module row so the folder
+            // appears and the displaced tiles are placed again.
+            val hasFolder = saved.flatten().any { it.spec == FOLDER_SPEC }
+            val pages =
+                if (folderEnabled && !hasFolder) {
+                    val defaultFirst =
+                        PenguinGrid.defaults(modules, tiles, largeTiles, flavor).firstOrNull()
+                            ?: emptyList()
+                    listOf(defaultFirst) + saved
+                } else {
+                    saved
+                }
+            resolved = PenguinGrid.resolve(pages, modules, tiles, largeTiles, flavor = flavor)
+        } else {
+            resolved = PenguinGrid.defaults(modules, tiles, largeTiles, flavor)
+        }
         PenguinGridModel(
             modules = modules,
             tiles = tiles,
