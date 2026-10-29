@@ -85,6 +85,7 @@ import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -1308,7 +1309,8 @@ private fun AddControlSheet(
             PenguinGrid.BRIGHTNESS_SPEC to stringResource(R.string.penguin_cc_brightness),
             PenguinGrid.VOLUME_SPEC to stringResource(R.string.penguin_cc_volume),
             PenguinGrid.ONEUI_TOGGLES_SPEC to stringResource(R.string.oneui_toggles),
-            PenguinGrid.ONEUI_SOUND_SPEC to stringResource(R.string.oneui_sound_mode),
+            PenguinGrid.ONEUI_SOUND_SPEC to stringResource(R.string.penguin_cc_volume),
+            PenguinGrid.ONEUI_DARK_SPEC to stringResource(R.string.oneui_qs_dark),
         )
     val moduleIcons =
         mapOf(
@@ -1317,7 +1319,8 @@ private fun AddControlSheet(
             PenguinGrid.BRIGHTNESS_SPEC to Icons.Rounded.BrightnessHigh,
             PenguinGrid.VOLUME_SPEC to Icons.AutoMirrored.Rounded.VolumeUp,
             PenguinGrid.ONEUI_TOGGLES_SPEC to Icons.Rounded.Apps,
-            PenguinGrid.ONEUI_SOUND_SPEC to Icons.Rounded.Vibration,
+            PenguinGrid.ONEUI_SOUND_SPEC to Icons.AutoMirrored.Rounded.VolumeUp,
+            PenguinGrid.ONEUI_DARK_SPEC to Icons.Rounded.DarkMode,
         )
     val onPage = currentPage.map { it.spec }.toSet()
     val availableModules =

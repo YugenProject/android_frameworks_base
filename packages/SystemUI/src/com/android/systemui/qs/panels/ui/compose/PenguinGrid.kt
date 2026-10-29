@@ -33,12 +33,21 @@ object PenguinGrid {
 
     val ONEUI_TOGGLES_SPEC = TileSpec.create("penguin_oneui_toggles")
 
+    val ONEUI_DARK_SPEC = TileSpec.create("penguin_oneui_dark")
+
     val ONEUI_SOUND_SPEC = TileSpec.create("penguin_oneui_sound")
 
     val MODULE_SPECS = listOf(FOLDER_SPEC, MEDIA_SPEC, BRIGHTNESS_SPEC, VOLUME_SPEC)
 
     private val ONEUI_MODULE_SPECS =
-        listOf(ONEUI_TOGGLES_SPEC, BRIGHTNESS_SPEC, VOLUME_SPEC, ONEUI_SOUND_SPEC, MEDIA_SPEC)
+        listOf(
+            ONEUI_TOGGLES_SPEC,
+            BRIGHTNESS_SPEC,
+            VOLUME_SPEC,
+            ONEUI_DARK_SPEC,
+            ONEUI_SOUND_SPEC,
+            MEDIA_SPEC,
+        )
 
     enum class Flavor(val setting: String, val maxRows: Int) {
         ControlCentre(SETTING, MAX_ROWS),
@@ -53,7 +62,10 @@ object PenguinGrid {
     }
 
     fun isModule(spec: TileSpec) =
-        spec in MODULE_SPECS || spec == ONEUI_TOGGLES_SPEC || spec == ONEUI_SOUND_SPEC
+        spec in MODULE_SPECS ||
+            spec == ONEUI_TOGGLES_SPEC ||
+            spec == ONEUI_SOUND_SPEC ||
+            spec == ONEUI_DARK_SPEC
 
     data class Item(val spec: TileSpec, val x: Int, val y: Int, val w: Int, val h: Int) {
         val right: Int

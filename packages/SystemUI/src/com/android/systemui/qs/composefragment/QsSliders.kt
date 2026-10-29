@@ -175,6 +175,7 @@ import com.android.systemui.qs.panels.ui.compose.QuickQuickSettings
 import com.android.systemui.qs.panels.ui.compose.TileGrid
 import com.android.systemui.qs.shared.style.LiquidGlassBrightness
 import com.android.systemui.qs.shared.style.LiquidGlassVolume
+import com.android.systemui.qs.shared.style.QsPanelStyle
 import com.android.systemui.qs.shared.style.glassRim
 import com.android.systemui.qs.shared.style.liquidGlassOn
 import com.android.systemui.qs.shared.ui.QuickSettings.Elements
@@ -670,15 +671,16 @@ fun HorizontalSlider(
     housingHeight: Dp,
     interactive: Boolean = true,
 ) {
-    val iconSize = 22.dp
-    val iconStartPadding = 14.dp
+    val oneUi = effectiveQsPanelStyle() == QsPanelStyle.OneUi
+    val iconSize = if (oneUi) 24.dp else 22.dp
+    val iconStartPadding = if (oneUi) (housingHeight - iconSize) / 2 else 14.dp
     BoxWithConstraints(
         modifier =
             modifier
                 .fillMaxWidth()
                 .height(housingHeight)
                 .clip(RoundedCornerShape(percent = 50))
-                .background(glassSurface())
+                .background(if (oneUi) Color.White.copy(alpha = 0.35f) else glassSurface())
                 .glassRim(RoundedCornerShape(percent = 50))
                 .thenIf(interactive) {
                     Modifier.sliderGesturesHorizontal(
@@ -690,23 +692,23 @@ fun HorizontalSlider(
                 },
         contentAlignment = Alignment.CenterStart,
     ) {
-        val fillWidth = maxWidth * value
+        val fillWidth = if (oneUi) maxOf(housingHeight, maxWidth * value) else maxWidth * value
         val fillCapRadius = (housingHeight / 2).coerceAtMost(fillWidth / 2)
         Box(
             modifier =
-                Modifier.fillMaxWidth(value)
+                Modifier.width(fillWidth)
                     .fillMaxHeight()
                     .clip(
                         RoundedCornerShape(topEnd = fillCapRadius, bottomEnd = fillCapRadius)
                     )
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(if (oneUi) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary)
         )
         val iconCovered = fillWidth > iconStartPadding + iconSize
         Icon(
             painter = icon,
             contentDescription = null,
             tint =
-                if (iconCovered) MaterialTheme.colorScheme.onPrimary
+                if (oneUi) Color(0xFF45494B) else if (iconCovered) MaterialTheme.colorScheme.onPrimary
                 else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(start = iconStartPadding).size(iconSize),
         )

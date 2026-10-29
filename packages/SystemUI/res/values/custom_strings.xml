@@ -33,6 +33,12 @@
     <string name="oneui_play_music">Play music</string>
     <!-- One UI Quick Settings: edits the tiles in the card of round toggles. -->
     <string name="oneui_edit">Edit</string>
+    <!-- One UI Quick Settings: power button in header. -->
+    <string name="oneui_qs_power">Power</string>
+    <!-- One UI Quick Settings: settings button in header. -->
+    <string name="oneui_qs_settings">Settings</string>
+    <!-- One UI Quick Settings: dark mode toggle. -->
+    <string name="oneui_qs_dark">Dark mode</string>
     <!-- One UI Quick Settings: Add a control names for its cards. -->
     <string name="oneui_toggles">Toggles</string>
     <string name="oneui_sound_mode">Sound mode</string>

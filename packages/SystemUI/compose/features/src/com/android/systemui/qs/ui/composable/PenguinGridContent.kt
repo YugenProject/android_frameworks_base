@@ -89,6 +89,9 @@ import com.android.systemui.qs.composefragment.OneUiExtraDimButton
 import com.android.systemui.qs.composefragment.OneUiSoundModeButton
 import com.android.systemui.qs.composefragment.OneUiTileControl
 import com.android.systemui.qs.composefragment.OneUiTogglesCard
+import com.android.systemui.qs.composefragment.OneUiIdleMedia
+import com.android.systemui.qs.composefragment.OneUiDarkModeButton
+import com.android.systemui.qs.composefragment.OneUiQsTheme
 import com.android.systemui.qs.composefragment.OneUiVolumePanelButton
 import com.android.systemui.qs.composefragment.PenguinMediaCard
 import com.android.systemui.qs.composefragment.VolumeLayout
@@ -188,7 +191,8 @@ private val WideReservedHeight = 96.dp
 
 @Composable
 private fun penguinCell(): Dp =
-    LocalPenguinCell.current ?: dimensionResource(id = R.dimen.common_tile_default_tile_height)
+    LocalPenguinCell.current ?: if (LocalPenguinGridFlavor.current == PenguinGrid.Flavor.OneUi) 76.dp
+    else dimensionResource(id = R.dimen.common_tile_default_tile_height)
 
 @Composable
 private fun wideCell(): Dp {
@@ -250,7 +254,15 @@ internal fun rememberPenguinGridModel(viewModel: QuickSettingsContainerViewModel
                 }
             resolved = PenguinGrid.resolve(pages, modules, tiles, largeTiles, flavor = flavor)
         } else {
-            resolved = PenguinGrid.defaults(modules, tiles, largeTiles, flavor)
+            val defaultPills =
+                if (oneUi) {
+                    val pills =
+                        setOf("wifi", "internet", "bt", "cell", "cast", "controls", "modes", "nearby")
+                    tiles.filter { it.spec in pills }.toSet()
+                } else {
+                    largeTiles.filter { it.spec in setOf("wifi", "internet", "bt", "cell") }.toSet()
+                }
+            resolved = PenguinGrid.defaults(modules, tiles, defaultPills, flavor)
         }
         PenguinGridModel(
             modules = modules,
@@ -292,7 +304,7 @@ fun ContentScope.OneUiGridQuickSettings(
     modifier: Modifier = Modifier,
 ) {
     CompositionLocalProvider(LocalPenguinGridFlavor provides PenguinGrid.Flavor.OneUi) {
-        PenguinGridTheme { PenguinGridQuickSettingsContent(viewModel, modifier) }
+        OneUiQsTheme { PenguinGridQuickSettingsContent(viewModel, modifier) }
     }
 }
 
@@ -318,12 +330,29 @@ private fun ContentScope.PenguinGridPages(
     modifier: Modifier,
 ) {
     val wide = wideControlCentre()
+    val oneUi = LocalPenguinGridFlavor.current == PenguinGrid.Flavor.OneUi
+    val mediaShown = viewModel.showMedia && viewModel.hasMediaCards
     val combined = contentKey != Overlays.QuickSettingsShade
-    val pages = remember(model.pages, wide, combined) {
+    val pages = remember(model.pages, wide, combined, oneUi, mediaShown) {
         val shown =
             if (combined) model.pages.filterIndexed { i, page -> i == 0 || !isModulePage(page) }
             else model.pages
-        if (wide) shown.map(PenguinGrid::foldWide) else shown
+        val laidOut = if (wide) shown.map(PenguinGrid::foldWide) else shown
+        if (!oneUi || mediaShown) laidOut else laidOut.map { page ->
+            val media = page.firstOrNull { it.spec == MEDIA_SPEC }
+            val columns = if (wide) PenguinGrid.COLUMNS * 2 else PenguinGrid.COLUMNS
+            val sharedRows = media != null && page.any { item ->
+                item != media && item.y < media.bottom && item.bottom > media.y
+            }
+            if (media == null || media.h <= 1 || media.w < columns || sharedRows) page
+            else page.map { item ->
+                when {
+                    item.spec == MEDIA_SPEC -> item.copy(h = 1)
+                    item.y >= media.bottom -> item.copy(y = item.y - media.h + 1)
+                    else -> item
+                }
+            }
+        }
     }
     val columns = if (wide) PenguinGrid.COLUMNS * 2 else PenguinGrid.COLUMNS
 
@@ -346,7 +375,6 @@ private fun ContentScope.PenguinGridPages(
     }
 
     val pageHeight = penguinPageHeight(pages)
-    val mediaShown = viewModel.showMedia && viewModel.hasMediaCards
     val pagerState = rememberPagerState(pageCount = { pages.size })
 
     val expanded = ConnectivityFolderExpansion.expanded || PenguinMediaExpansion.expanded
@@ -363,7 +391,7 @@ private fun ContentScope.PenguinGridPages(
         delay(500)
         settled = true
     }
-    val horizontalMargin = PenguinGridMargin
+    val horizontalMargin = if (LocalPenguinGridFlavor.current == PenguinGrid.Flavor.OneUi) 0.dp else PenguinGridMargin
 
     Box(
         modifier =
@@ -602,7 +630,11 @@ internal fun ContentScope.GridItemContent(
             }
             PenguinGrid.ONEUI_SOUND_SPEC ->
                 Box(Modifier.height(height).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    OneUiSoundModeButton(height)
+                    OneUiVolumePanelButton(height)
+                }
+            PenguinGrid.ONEUI_DARK_SPEC ->
+                Box(Modifier.height(height).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    OneUiDarkModeButton(height)
                 }
             FOLDER_SPEC ->
                 if (item.h >= 4) {
@@ -643,7 +675,7 @@ internal fun ContentScope.GridItemContent(
                         },
                     )
                 } else {
-                    NotPlaying(height)
+                    if (oneUi) OneUiIdleMedia(Modifier.height(height)) else NotPlaying(height)
                 }
             PenguinGrid.BRIGHTNESS_SPEC ->
                 OneUiSliderWithButton(

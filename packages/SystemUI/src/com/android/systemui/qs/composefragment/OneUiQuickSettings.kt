@@ -16,8 +16,10 @@
 
 package com.android.systemui.qs.composefragment
 
+import android.app.UiModeManager
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.content.Intent
 import android.content.IntentFilter
@@ -29,6 +31,7 @@ import android.provider.Settings
 import android.service.quicksettings.Tile
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -73,28 +76,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.qs.panels.ui.compose.TileListener
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.SmallTileContent
 import com.android.systemui.qs.panels.ui.viewmodel.TileViewModel
-import com.android.systemui.qs.shared.style.LiquidGlassControl
 import com.android.systemui.qs.shared.style.glassPress
 import com.android.systemui.qs.shared.style.glassRim
-import com.android.systemui.qs.shared.style.liquidGlassOn
+import com.android.systemui.qs.shared.style.QsPanelStyle
 import com.android.systemui.res.R
 import kotlin.math.roundToInt
 
 val OneUiGap = 12.dp
 private val OneUiPillHeight = 80.dp
 private val OneUiPillCorner = 40.dp
-private val OneUiCardCorner = 36.dp
+private val OneUiCardCorner = 40.dp
 private val OneUiToggleSize = 58.dp
 private val OneUiSliderHeight = 72.dp
 private val OneUiDiscInPill = 52.dp
@@ -108,11 +113,13 @@ private const val DarkModeSpec = "dark"
 @Composable
 @ReadOnlyComposable
 private fun oneUiOff(): Color =
-    if (liquidGlassOn) LiquidGlassControl else Color.Black.copy(alpha = 0.18f)
+    Color.Black.copy(alpha = 0.22f)
 
 @Composable
 private fun Modifier.oneUiCard(corner: Dp = OneUiCardCorner): Modifier =
-    clip(RoundedCornerShape(corner)).background(glassSurface()).glassRim(RoundedCornerShape(corner))
+    clip(RoundedCornerShape(corner))
+        .background(Color(0xFF26373B).copy(alpha = 0.55f))
+        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(corner))
 
 @Composable
 private fun ListenTo(tiles: List<TileViewModel>) {
@@ -193,7 +200,7 @@ private fun OneUiPill(tile: TileViewModel, modifier: Modifier = Modifier) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = uiState.label,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = Color.White,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -201,7 +208,7 @@ private fun OneUiPill(tile: TileViewModel, modifier: Modifier = Modifier) {
             if (uiState.secondaryLabel.isNotBlank()) {
                 Text(
                     text = uiState.secondaryLabel,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.White.copy(alpha = 0.65f),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -228,7 +235,7 @@ private fun OneUiDisc(icon: Icon, active: Boolean, size: Dp) {
     ) {
         SmallTileContent(
             iconProvider = { icon },
-            color = if (active) Color(0xFF1C1B1F) else Color.White,
+            color = if (active) Color(0xFF1C1B1F) else Color.White.copy(alpha = 0.52f),
             size = { size * 0.46f },
         )
     }
@@ -249,7 +256,7 @@ fun OneUiTogglesCard(
     val pagerState = rememberPagerState(pageCount = { pages.size })
     Box(modifier = modifier.fillMaxWidth()) {
     Column(
-        modifier = Modifier.fillMaxWidth().oneUiCard().padding(top = 14.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().oneUiCard().padding(top = 22.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = spacedBy(8.dp),
     ) {
@@ -260,7 +267,7 @@ fun OneUiTogglesCard(
         ) { page ->
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-                verticalArrangement = spacedBy(12.dp),
+                verticalArrangement = spacedBy(16.dp),
             ) {
                 pages[page].chunked(OneUiToggleColumns).let { chunks ->
                     chunks + List(rows - chunks.size) { emptyList() }
@@ -280,7 +287,7 @@ fun OneUiTogglesCard(
             repeat(pages.size.coerceAtLeast(1)) { index ->
                 val current = index == pagerState.currentPage
                 Box(
-                    Modifier.width(if (current) 20.dp else 6.dp)
+                    Modifier.width(if (current) 28.dp else 5.dp)
                         .height(4.dp)
                         .clip(CircleShape)
                         .background(
@@ -583,10 +590,10 @@ private fun OneUiRoundButton(size: Dp, glyph: ImageVector, active: Boolean, onCl
 }
 
 @Composable
-private fun OneUiIdleMedia() {
+fun OneUiIdleMedia(modifier: Modifier = Modifier) {
     Row(
         modifier =
-            Modifier.fillMaxWidth()
+            modifier.fillMaxWidth()
                 .height(OneUiPillHeight)
                 .oneUiCard(OneUiPillCorner)
                 .padding(horizontal = 24.dp),
@@ -596,12 +603,37 @@ private fun OneUiIdleMedia() {
         MaterialIcon(
             imageVector = Icons.Rounded.MusicNote,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
+            tint = Color.White,
         )
         Text(
             text = stringResource(R.string.oneui_play_music),
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color.White,
             style = MaterialTheme.typography.titleSmall,
         )
     }
+}
+
+
+@Composable
+fun OneUiDarkModeButton(size: Dp) {
+    val context = LocalContext.current
+    val night = LocalConfiguration.current.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+        Configuration.UI_MODE_NIGHT_YES
+    OneUiRoundButton(size, Icons.Rounded.DarkMode, active = false) {
+        context.getSystemService(UiModeManager::class.java).setNightModeActivated(!night)
+    }
+}
+
+@Composable
+fun OneUiQsTheme(content: @Composable () -> Unit) {
+    val base = MaterialTheme.typography
+    MaterialTheme(typography = base.copy(
+        titleSmall = base.titleSmall.copy(fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold),
+        titleMedium = base.titleMedium,
+        bodySmall = base.bodySmall,
+        bodyMedium = base.bodyMedium,
+        labelSmall = base.labelSmall,
+        labelMedium = base.labelMedium,
+    ), content = content)
 }
