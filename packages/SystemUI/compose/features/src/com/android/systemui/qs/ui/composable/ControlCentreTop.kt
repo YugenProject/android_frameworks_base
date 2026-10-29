@@ -34,10 +34,9 @@ import com.android.systemui.animation.Expandable
 import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.toolbar.ToolbarViewModel
 import com.android.systemui.qs.shared.style.QsPanelStyle
-import com.android.systemui.qs.shared.style.glassBlurRegion
 import com.android.systemui.qs.shared.style.glassPress
+import com.android.systemui.qs.shared.style.glassRim
 import com.android.systemui.qs.shared.style.liquidGlassEnabled
-import com.android.systemui.qs.shared.style.liquidGlassRim
 import com.android.systemui.qs.shared.style.panelStyle
 import com.android.systemui.qs.ui.viewmodel.QuickSettingsContainerViewModel
 import com.android.systemui.shade.ui.composable.ShadeStatusRow
@@ -96,8 +95,7 @@ fun ContentScope.ControlCentreTop(
 private fun GlassButton(icon: ImageVector, onClick: (Expandable) -> Unit) {
     Box(
         Modifier.size(ButtonSize)
-            .glassBlurRegion(CircleShape)
-            .liquidGlassRim(CircleShape)
+            .glassRim(CircleShape)
             .glassPress()
     ) {
         Expandable(

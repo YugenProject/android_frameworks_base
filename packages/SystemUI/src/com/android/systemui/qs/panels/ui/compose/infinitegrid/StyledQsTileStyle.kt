@@ -32,12 +32,11 @@ import com.android.systemui.qs.shared.style.LiquidGlassControl
 import com.android.systemui.qs.shared.style.LiquidGlassGlyphs
 import com.android.systemui.qs.shared.style.LiquidGlassSurface
 import com.android.systemui.qs.shared.style.LiquidGlassTune
-import com.android.systemui.qs.shared.style.glassBlurRegion
+import com.android.systemui.qs.shared.style.glassRim
 import com.android.systemui.qs.shared.style.isStockQsStyle
 import com.android.systemui.qs.shared.style.liquidGlassEnabled
 import com.android.systemui.qs.shared.style.liquidGlassOn
 import com.android.systemui.qs.shared.style.liquidGlassPress
-import com.android.systemui.qs.shared.style.liquidGlassRim
 import com.android.systemui.res.R
 
 @Composable
@@ -79,7 +78,10 @@ private class StyledQsTileStyle(
     @Composable
     override fun Container(shape: Shape, content: @Composable () -> Unit) {
         if (glass) {
-            Box(Modifier.glassBlurRegion(shape).liquidGlassRim(shape)) { content() }
+            // glassRim drops the rim for the Frosted style and keeps it for Rimmed, so tiles match
+            // the folder, media player and sliders instead of keeping a rim only Frosted removed
+            // everywhere else.
+            Box(Modifier.glassRim(shape)) { content() }
         } else {
             content()
         }
